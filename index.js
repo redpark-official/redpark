@@ -460,6 +460,13 @@ io.on('connection', (socket) => {
     } else if (action === 'unban') {
       if (!user.admin) return socket.emit('admin_error', 'Only admins can unban');
       await saveUser(targetUsername, { banned: false });
+    } else if (action === 'delete_account') {
+      if (!user.admin) return socket.emit('admin_error', 'Only admins can delete accounts');
+      const sid = getSocketIdByUsername(targetUsername);
+      if (sid) io.to(sid).emit('kick', 'Your account has been deleted by an admin.');
+      await supabase.from('players').delete().eq('username', targetUsername);
+      delete userCache[targetUsername];
+      return socket.emit('admin_success', targetUsername + ' was deleted.');
     } else if (action === 'ip_ban') {
       if (!user.admin) return socket.emit('admin_error', 'Only admins can IP-ban');
       const sid = getSocketIdByUsername(targetUsername);

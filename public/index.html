@@ -1,0 +1,1343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Red Park</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',system-ui,sans-serif}
+body{overflow:hidden;background:#0a0a0a;color:#fff}
+canvas{display:block}
+#start-screen{position:fixed;inset:0;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;z-index:1000;transition:opacity .5s}
+#start-screen.hidden{opacity:0;pointer-events:none}
+.auth-box{background:rgba(255,255,255,.06);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.12);border-radius:24px;padding:40px;width:360px;max-width:90vw}
+.auth-box h1{text-align:center;font-size:28px;font-weight:800;margin-bottom:4px;background:linear-gradient(90deg,#f87171,#facc15);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.auth-box p{text-align:center;color:#94a3b8;font-size:13px;margin-bottom:24px}
+.auth-tabs{display:flex;gap:8px;margin-bottom:20px;background:rgba(0,0,0,.2);border-radius:12px;padding:4px}
+.auth-tab{flex:1;padding:10px;text-align:center;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;color:#94a3b8;transition:all .2s}
+.auth-tab.active{background:rgba(255,255,255,.1);color:#fff}
+.auth-field{margin-bottom:14px}
+.auth-field label{display:block;font-size:12px;color:#94a3b8;margin-bottom:6px;font-weight:600}
+.auth-field input{width:100%;padding:12px 16px;border-radius:10px;border:1px solid rgba(255,255,255,.1);background:rgba(0,0,0,.2);color:#fff;font-size:14px;outline:none}
+.auth-field input:focus{border-color:#f87171}
+.auth-btn{width:100%;padding:14px;border:none;border-radius:10px;background:linear-gradient(90deg,#f87171,#ef4444);color:#fff;font-size:15px;font-weight:700;cursor:pointer;transition:transform .15s}
+.auth-btn:hover{transform:scale(1.02)}
+.auth-btn:active{transform:scale(.98)}
+#auth-err{color:#f87171;font-size:13px;text-align:center;min-height:18px;margin-top:12px}
+.auth-hint{text-align:center;font-size:11px;color:#64748b;margin-top:16px;line-height:1.5}
+#game-wrap{display:none;width:100vw;height:100vh;position:relative}
+#c{position:absolute;inset:0}
+#hud{position:absolute;top:16px;left:16px;display:flex;flex-direction:column;gap:8px;pointer-events:none;z-index:10}
+.hud-card{background:rgba(0,0,0,.5);backdrop-filter:blur(10px);border-radius:12px;padding:8px 14px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px}
+#coin-counter{position:absolute;top:16px;right:16px;background:rgba(0,0,0,.5);backdrop-filter:blur(10px);border-radius:12px;padding:8px 16px;font-size:18px;font-weight:800;color:#facc15;z-index:10;opacity:0;transition:opacity .3s}
+#coin-counter.show{opacity:1}
+#chat-box{position:absolute;bottom:16px;left:16px;width:340px;max-width:50vw;z-index:10}
+#chat-messages{background:rgba(0,0,0,.4);backdrop-filter:blur(10px);border-radius:12px;padding:10px;height:180px;overflow-y:auto;margin-bottom:8px;display:flex;flex-direction:column;gap:4px}
+#chat-messages::-webkit-scrollbar{width:4px}
+#chat-messages::-webkit-scrollbar-thumb{background:rgba(255,255,255,.2);border-radius:2px}
+.chat-msg{font-size:12px;line-height:1.4}
+.chat-msg .uname{font-weight:700}
+.chat-input-row{display:flex;gap:6px}
+#chat-input{flex:1;padding:10px 14px;border-radius:10px;border:1px solid rgba(255,255,255,.1);background:rgba(0,0,0,.4);backdrop-filter:blur(10px);color:#fff;font-size:13px;outline:none}
+#chat-send{padding:10px 16px;border:none;border-radius:10px;background:#f87171;color:#fff;font-weight:600;cursor:pointer;font-size:13px}
+#wrist-menu{position:absolute;bottom:16px;right:16px;z-index:10}
+#wrist-toggle{width:56px;height:56px;border-radius:50%;background:rgba(0,0,0,.5);backdrop-filter:blur(10px);border:2px solid rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:24px;transition:transform .15s}
+#wrist-toggle:hover{transform:scale(1.05)}
+#wrist-panel{position:absolute;bottom:70px;right:0;background:rgba(0,0,0,.6);backdrop-filter:blur(15px);border-radius:16px;padding:12px;min-width:220px;display:none;flex-direction:column;gap:6px}
+#wrist-panel.open{display:flex}
+.wrist-item{padding:12px 14px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:600;display:flex;align-items:center;gap:10px;transition:background .15s}
+.wrist-item:hover{background:rgba(255,255,255,.08)}
+.wrist-item-sub{font-size:11px;color:#94a3b8;margin-left:auto}
+.panel{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(20,20,30,.95);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:28px;width:420px;max-width:90vw;max-height:80vh;overflow-y:auto;z-index:100;display:none}
+.panel.open{display:block}
+.panel h2{font-size:20px;font-weight:800;margin-bottom:16px}
+.panel-close{position:absolute;top:16px;right:16px;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.08);border:none;color:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.panel-close:hover{background:rgba(255,255,255,.15)}
+#notif{position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:200;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+.notif-card{background:rgba(0,0,0,.8);backdrop-filter:blur(15px);border-radius:14px;padding:14px 20px;min-width:280px;max-width:90vw;animation:slideDown .3s ease}
+.notif-title{font-size:14px;font-weight:700}
+.notif-body{font-size:12px;color:#94a3b8;margin-top:4px}
+.notif-actions{display:flex;gap:8px;margin-top:10px}
+.notif-btn{padding:6px 14px;border-radius:8px;border:none;font-size:12px;font-weight:600;cursor:pointer;background:rgba(255,255,255,.1);color:#fff}
+.notif-btn.sb-r{background:rgba(248,113,113,.3)}
+@keyframes slideDown{from{opacity:0;transform:translateY(-20px)}to{opacity:1;transform:translateY(0)}}
+#minimap{position:absolute;top:16px;right:80px;width:140px;height:140px;border-radius:50%;background:rgba(0,0,0,.4);border:2px solid rgba(255,255,255,.1);z-index:10;overflow:hidden}
+#tag-hud{position:absolute;top:170px;right:16px;background:rgba(0,0,0,.5);backdrop-filter:blur(10px);border-radius:12px;padding:10px 16px;font-size:13px;font-weight:700;z-index:10;display:none}
+#tag-hud.show{display:block}
+#joy-outer{position:absolute;bottom:80px;left:20px;width:130px;height:130px;border-radius:50%;background:rgba(0,0,0,.3);border:2px solid rgba(255,255,255,.1);z-index:10;display:none;touch-action:none}
+#joy-inner{position:absolute;top:38px;left:38px;width:54px;height:54px;border-radius:50%;background:rgba(255,255,255,.2);border:2px solid rgba(255,255,255,.3)}
+.emote-bar{position:absolute;bottom:80px;right:90px;display:flex;gap:6px;z-index:10}
+.emote-btn{width:44px;height:44px;border-radius:12px;background:rgba(0,0,0,.5);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.1);font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .15s}
+.emote-btn:hover{transform:scale(1.1)}
+.friend-row{display:flex;align-items:center;gap:10px;padding:10px;border-radius:10px;background:rgba(255,255,255,.04);margin-bottom:6px}
+.friend-avatar{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px}
+.friend-name{font-size:14px;font-weight:600}
+.friend-status{font-size:11px;color:#64748b}
+.friend-actions{margin-left:auto;display:flex;gap:6px}
+.friend-act-btn{padding:5px 12px;border-radius:8px;border:none;font-size:11px;font-weight:600;cursor:pointer;background:rgba(255,255,255,.1);color:#fff}
+.friend-act-btn.accept{background:rgba(74,222,128,.25)}
+.friend-act-btn.deny{background:rgba(248,113,113,.25)}
+.lb-row{display:flex;align-items:center;gap:10px;padding:10px;border-radius:10px;background:rgba(255,255,255,.04);margin-bottom:6px}
+.lb-rank{font-size:18px;font-weight:800;width:28px;text-align:center}
+.lb-name{font-size:14px;font-weight:600}
+.lb-coins{margin-left:auto;font-size:14px;font-weight:700;color:#facc15}
+.color-swatch{width:32px;height:32px;border-radius:8px;cursor:pointer;border:2px solid transparent;transition:transform .15s;display:inline-block}
+.color-swatch:hover{transform:scale(1.1)}
+.color-swatch.active{border-color:#fff}
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+.stat-card{background:rgba(255,255,255,.05);border-radius:12px;padding:14px;text-align:center}
+.stat-val{font-size:22px;font-weight:800}
+.stat-label{font-size:11px;color:#64748b;margin-top:4px}
+.admin-row{display:flex;align-items:center;gap:10px;padding:10px;border-radius:10px;background:rgba(255,255,255,.04);margin-bottom:6px}
+.admin-name{font-size:14px;font-weight:600}
+.admin-badges{font-size:10px;display:flex;gap:4px}
+.admin-badge{padding:2px 6px;border-radius:4px;font-weight:700}
+.admin-actions{margin-left:auto;display:flex;gap:4px;flex-wrap:wrap}
+.admin-btn{padding:4px 10px;border-radius:6px;border:none;font-size:10px;font-weight:600;cursor:pointer;background:rgba(255,255,255,.1);color:#fff}
+.admin-btn.danger{background:rgba(248,113,113,.3)}
+.admin-btn.warn{background:rgba(250,204,21,.25)}
+</style>
+</head>
+<body>
+<div id="start-screen">
+  <div class="auth-box">
+    <h1>Red Park</h1>
+    <p>A multiplayer 3D park world</p>
+    <div class="auth-tabs">
+      <div class="auth-tab active" onclick="switchTab('login')">Login</div>
+      <div class="auth-tab" onclick="switchTab('register')">Register</div>
+    </div>
+    <div id="login-f">
+      <div class="auth-field"><label>Username</label><input id="lu" type="text" autocomplete="username"></div>
+      <div class="auth-field"><label>Password</label><input id="lp" type="password" autocomplete="current-password"></div>
+      <button class="auth-btn" onclick="doLogin()">Enter Park</button>
+    </div>
+    <div id="reg-f" style="display:none">
+      <div class="auth-field"><label>Username (min 3 chars)</label><input id="ru" type="text" autocomplete="username"></div>
+      <div class="auth-field"><label>Password</label><input id="rp" type="password" autocomplete="new-password"></div>
+      <button class="auth-btn" onclick="doRegister()">Create Account</button>
+    </div>
+    <div id="auth-err"></div>
+    <div class="auth-hint">Your coins, color, friends, and progress are saved to your account.</div>
+  </div>
+</div>
+
+<div id="game-wrap">
+  <canvas id="c"></canvas>
+  <div id="hud">
+    <div class="hud-card" id="hud-players">1 player</div>
+    <div class="hud-card" id="hud-coords">0, 0</div>
+  </div>
+  <div id="coin-counter">0 coins</div>
+  <canvas id="minimap" width="140" height="140"></canvas>
+  <div id="tag-hud"></div>
+  <div id="chat-box">
+    <div id="chat-messages"></div>
+    <div class="chat-input-row">
+      <input id="chat-input" placeholder="Type a message..." maxlength="200" onkeydown="if(event.key==='Enter')sendChat()">
+      <button id="chat-send" onclick="sendChat()">Send</button>
+    </div>
+  </div>
+  <div class="emote-bar">
+    <div class="emote-btn" onclick="sendEmote('wave')">👋</div>
+    <div class="emote-btn" onclick="sendEmote('dance')">💃</div>
+    <div class="emote-btn" onclick="sendEmote('sit')">🪑</div>
+    <div class="emote-btn" onclick="sendEmote('jump')">⭐</div>
+  </div>
+  <div id="joy-outer"><div id="joy-inner"></div></div>
+  <div id="wrist-menu">
+    <div id="wrist-toggle" onclick="toggleWrist()">☰</div>
+    <div id="wrist-panel">
+      <div class="wrist-item" onclick="openPanel('profile-panel');closeWrist()">
+        <span>👤</span><span>Profile</span>
+        <span class="wrist-item-sub" id="wrist-uname">—</span>
+      </div>
+      <div class="wrist-item" onclick="openPanel('friends-panel');closeWrist()">
+        <span>🤝</span><span>Friends</span>
+        <span class="wrist-item-sub" id="wrist-friends">0</span>
+      </div>
+      <div class="wrist-item" onclick="openPanel('leaderboard-panel');closeWrist()">
+        <span>🏆</span><span>Leaderboard</span>
+        <span class="wrist-item-sub" id="wrist-coins">0 coins</span>
+      </div>
+      <div class="wrist-item" onclick="openPanel('customize-panel');closeWrist()">
+        <span>🎨</span><span>Customize</span>
+      </div>
+      <div class="wrist-item" onclick="openPanel('tag-panel');closeWrist()">
+        <span>🎯</span><span>Tag Game</span>
+      </div>
+      <div class="wrist-item" onclick="openPanel('settings-panel');closeWrist()">
+        <span>⚙️</span><span>Settings</span>
+      </div>
+      <div class="wrist-item" id="admin-wrist-item" style="display:none" onclick="openPanel('admin-panel');closeWrist()">
+        <span>🛡️</span><span>Admin</span>
+      </div>
+      <div class="wrist-item" onclick="doLogout()" style="color:#f87171">
+        <span>🚪</span><span>Logout</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Panels -->
+<div class="panel" id="profile-panel">
+  <button class="panel-close" onclick="closePanel('profile-panel')">×</button>
+  <h2>Profile</h2>
+  <div style="text-align:center;margin-bottom:20px">
+    <div id="profile-avatar" style="width:80px;height:80px;border-radius:50%;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:800">?</div>
+    <div id="profile-name" style="font-size:22px;font-weight:800">—</div>
+    <div id="profile-role" style="font-size:13px;color:#94a3b8;margin-top:4px">Explorer</div>
+  </div>
+  <div class="stat-grid">
+    <div class="stat-card"><div class="stat-val" id="stat-coins">0</div><div class="stat-label">Coins</div></div>
+    <div class="stat-card"><div class="stat-val" id="stat-friends">0</div><div class="stat-label">Friends</div></div>
+  </div>
+</div>
+
+<div class="panel" id="friends-panel">
+  <button class="panel-close" onclick="closePanel('friends-panel')">×</button>
+  <h2>Friends</h2>
+  <div style="display:flex;gap:8px;margin-bottom:16px">
+    <input id="friend-input" placeholder="Add username..." style="flex:1;padding:10px 14px;border-radius:10px;border:1px solid rgba(255,255,255,.1);background:rgba(0,0,0,.2);color:#fff;font-size:13px;outline:none">
+    <button onclick="sendFriendRequest()" style="padding:10px 16px;border-radius:10px;border:none;background:#f87171;color:#fff;font-weight:600;cursor:pointer">Add</button>
+  </div>
+  <div id="friend-requests"></div>
+  <div id="friend-list"></div>
+</div>
+
+<div class="panel" id="leaderboard-panel">
+  <button class="panel-close" onclick="closePanel('leaderboard-panel')">×</button>
+  <h2>Leaderboard</h2>
+  <div id="leaderboard-list"></div>
+</div>
+
+<div class="panel" id="customize-panel">
+  <button class="panel-close" onclick="closePanel('customize-panel')">×</button>
+  <h2>Customize Avatar</h2>
+  <p style="color:#94a3b8;font-size:13px;margin-bottom:16px">Pick a color for your character</p>
+  <div id="color-picker" style="display:flex;flex-wrap:wrap;gap:10px"></div>
+</div>
+
+<div class="panel" id="tag-panel">
+  <button class="panel-close" onclick="closePanel('tag-panel')">×</button>
+  <h2>Tag Mini-Game</h2>
+  <p style="color:#94a3b8;font-size:13px;margin-bottom:16px">One player is IT. Tag someone to pass IT. Don't get caught!</p>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <button class="auth-btn" style="width:auto;padding:10px 20px" onclick="startTag()">Start Game</button>
+    <button class="auth-btn" style="width:auto;padding:10px 20px;background:rgba(255,255,255,.1)" onclick="joinTag()">Join Game</button>
+    <button class="auth-btn" style="width:auto;padding:10px 20px;background:rgba(248,113,113,.5)" onclick="stopTag()">Stop Game</button>
+  </div>
+  <div id="tag-info" style="margin-top:16px"></div>
+</div>
+
+<div class="panel" id="settings-panel">
+  <button class="panel-close" onclick="closePanel('settings-panel')">×</button>
+  <h2>Settings</h2>
+  <div class="auth-field"><label>Look Sensitivity: <span id="sv">1.5</span></label><input type="range" min="0.5" max="3" step="0.1" value="1.5" style="width:100%" oninput="sensitivity=+this.value;document.getElementById('sv').textContent=this.value;saveSettings()"></div>
+  <div class="auth-field"><label>Move Speed: <span id="spv">5</span></label><input type="range" min="2" max="12" step="0.5" value="5" style="width:100%" oninput="moveSpeed=+this.value;document.getElementById('spv').textContent=this.value;saveSettings()"></div>
+</div>
+
+<div class="panel" id="admin-panel">
+  <button class="panel-close" onclick="closePanel('admin-panel')">×</button>
+  <h2>Admin Tools</h2>
+  <div id="admin-msg" style="font-size:13px;margin-bottom:12px;min-height:18px"></div>
+  <div id="admin-stats" style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap"></div>
+  <div style="display:flex;gap:8px;margin-bottom:16px">
+    <input id="admin-search" placeholder="Search username..." style="flex:1;padding:10px 14px;border-radius:10px;border:1px solid rgba(255,255,255,.1);background:rgba(0,0,0,.2);color:#fff;font-size:13px;outline:none" onkeydown="if(event.key==='Enter')adminSearch()">
+    <button onclick="adminSearch()" style="padding:10px 16px;border-radius:10px;border:none;background:#f87171;color:#fff;font-weight:600;cursor:pointer">Search</button>
+    <button onclick="adminListAll()" style="padding:10px 16px;border-radius:10px;border:none;background:rgba(255,255,255,.1);color:#fff;font-weight:600;cursor:pointer">All</button>
+  </div>
+  <div style="display:flex;gap:8px;margin-bottom:16px">
+    <input id="admin-broadcast" placeholder="Broadcast to all players..." maxlength="500" style="flex:1;padding:10px 14px;border-radius:10px;border:1px solid rgba(255,255,255,.1);background:rgba(0,0,0,.2);color:#fff;font-size:13px;outline:none" onkeydown="if(event.key==='Enter')adminBroadcast()">
+    <button onclick="adminBroadcast()" style="padding:10px 16px;border-radius:10px;border:none;background:linear-gradient(90deg,#f87171,#ef4444);color:#fff;font-weight:600;cursor:pointer">Send</button>
+  </div>
+  <div id="admin-list"></div>
+</div>
+
+<div id="notif"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+// ==================== GLOBALS ====================
+var socket, token, myUsername, myColor, isAdmin, isMod, isMuted, myCoins=0;
+var scene, camera, renderer, clock, sunMesh, gltfLoader;
+var modelCache = {};
+var remotePlayers = {};
+var collectibleOrbs = [];
+var treeMeshes = [];
+var tagState = { active: false };
+var friendData = { friends: [], requests: [] };
+var sensitivity = 1.5, moveSpeed = 5;
+var keys = {};
+var yaw = 0, pitch = 0;
+var velocity = { x: 0, z: 0 };
+var isSprinting = false;
+var joyActive = false, joyVec = { x: 0, y: 0 };
+var t3 = 0, dayNightT = 0;
+var playerHeight = 1.6;
+var lastFrameDt = 0.016;
+var animId;
+
+// ==================== AUTH ====================
+function switchTab(t) {
+  document.getElementById('login-f').style.display = t === 'login' ? 'block' : 'none';
+  document.getElementById('reg-f').style.display = t === 'register' ? 'block' : 'none';
+  document.querySelectorAll('.auth-tab').forEach(function(b, i) {
+    b.classList.toggle('active', (t === 'login' && i === 0) || (t === 'register' && i === 1));
+  });
+  document.getElementById('auth-err').textContent = '';
+}
+function setErr(m) { document.getElementById('auth-err').textContent = m; }
+function saveSession(t, u, c, a) {
+  try {
+    localStorage.setItem('rp_token', t);
+    localStorage.setItem('rp_username', u);
+    localStorage.setItem('rp_color', c);
+    localStorage.setItem('rp_admin', a ? '1' : '0');
+  } catch (e) {}
+}
+function loadSession() {
+  try {
+    var t = localStorage.getItem('rp_token');
+    var u = localStorage.getItem('rp_username');
+    var c = localStorage.getItem('rp_color');
+    var a = localStorage.getItem('rp_admin') === '1';
+    if (!t || !u) return null;
+    return { token: t, username: u, color: c, admin: a };
+  } catch (e) { return null; }
+}
+function clearSession() {
+  try { ['rp_token', 'rp_username', 'rp_color', 'rp_admin'].forEach(function(k) { localStorage.removeItem(k); }); } catch (e) {}
+}
+function saveSettings() {
+  try { localStorage.setItem('rp_settings', JSON.stringify({ sensitivity: sensitivity, moveSpeed: moveSpeed, color: myColor })); } catch (e) {}
+}
+function loadSettings() {
+  try {
+    var s = JSON.parse(localStorage.getItem('rp_settings') || '{}');
+    if (s.sensitivity) sensitivity = s.sensitivity;
+    if (s.moveSpeed) moveSpeed = s.moveSpeed;
+    if (s.color) myColor = s.color;
+  } catch (e) {}
+}
+function doLogin() {
+  var u = document.getElementById('lu').value.trim(), p = document.getElementById('lp').value;
+  if (!u || !p) return setErr('Fill all fields');
+  socket.emit('login', { username: u, password: p });
+}
+function doRegister() {
+  var u = document.getElementById('ru').value.trim(), p = document.getElementById('rp').value;
+  if (!u || !p) return setErr('Fill all fields');
+  socket.emit('register', { username: u, password: p });
+}
+function doLogout() {
+  clearSession();
+  token = null;
+  location.reload();
+}
+
+// ==================== SOCKET ====================
+function initSocket() {
+  socket = io();
+  socket.on('connect_error', function() { setErr('Cannot reach server'); });
+  socket.on('auth_error', function(m) { setErr(m); clearSession(); });
+  socket.on('auth_ok', function(d) {
+    token = d.token; myUsername = d.username; myColor = d.color; isAdmin = d.admin; isMod = d.mod;
+    saveSession(d.token, d.username, d.color, d.admin);
+    enterWorld();
+  });
+  socket.on('world_state', function(d) { d.players.forEach(function(p) { addRemote(p.id, p); }); updateHUD(); });
+  socket.on('player_joined', function(p) { addRemote(p.id, p); updateHUD(); showNotif(p.username + ' joined', '', 2000); });
+  socket.on('player_moved', function(d) {
+    var rp = remotePlayers[d.id];
+    if (rp) { rp.mesh.position.set(d.x, d.y + 0.06, d.z); rp.mesh.rotation.y = d.rotY; if (rp.mesh.userData) rp.mesh.userData.anim = d.anim || 'idle'; }
+  });
+  socket.on('player_left', function(d) {
+    var rp = remotePlayers[d.id];
+    if (rp) { scene.remove(rp.mesh); if (rp.lbl) rp.lbl.remove(); delete remotePlayers[d.id]; }
+    updateHUD();
+  });
+  socket.on('player_color', function(d) {
+    for (var id in remotePlayers) {
+      if (remotePlayers[id].username === d.username) {
+        remotePlayers[id].color = d.color;
+        remotePlayers[id].mesh.userData.bodyMat.color.set(d.color);
+      }
+    }
+  });
+  socket.on('chat_msg', addChatMsg);
+  socket.on('chat_blocked', function(m) { showNotif('Muted', m, 2500); });
+  socket.on('friend_data', function(d) { friendData = d; if (document.getElementById('friends-panel').classList.contains('open')) renderFriends(); updateWristFriends(); });
+  socket.on('friend_request_received', function(d) {
+    showNotif('Friend Request', d.from + ' wants to be friends', [
+      { l: 'Accept', fn: function() { socket.emit('friend_accept', { token: token, fromUsername: d.from }); } },
+      { l: 'Decline', cls: 'sb-r', fn: function() { socket.emit('friend_decline', { token: token, fromUsername: d.from }); } }
+    ]);
+  });
+  socket.on('friend_accepted', function(d) { showNotif('Now friends with ' + d.by, '', 2500); });
+  socket.on('friend_sent', function(u) { showNotif('Request sent to ' + u, '', 2000); });
+  socket.on('friend_error', function(m) { showNotif(m, '', 2000); });
+  socket.on('admin_success', function(m) { var e = document.getElementById('admin-msg'); e.style.color = '#4ade80'; e.textContent = m; socket.emit('admin_list', { token: token }); });
+  socket.on('admin_error', function(m) { var e = document.getElementById('admin-msg'); e.style.color = '#f87171'; e.textContent = m; });
+  socket.on('admin_list', renderAdminList);
+  socket.on('admin_announcement', function(d) {
+    var box = document.createElement('div');
+    box.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);background:linear-gradient(90deg,#f87171,#ef4444);color:#fff;padding:14px 28px;border-radius:12px;font-weight:600;font-size:14px;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,.4);max-width:80%;text-align:center';
+    box.innerHTML = '<div style="font-size:11px;opacity:.8;margin-bottom:4px">ANNOUNCEMENT from ' + d.from + '</div>' + d.message;
+    document.body.appendChild(box);
+    setTimeout(function() { box.style.transition = 'opacity .5s'; box.style.opacity = '0'; setTimeout(function() { box.remove(); }, 500); }, 5000);
+  });
+  socket.on('admin_teleport', function(d) {
+    if (localPlayer) { localPlayer.position.set(d.x, d.y, d.z); }
+    showPanelMsg('Teleported to ' + d.toUsername);
+  });
+  socket.on('kick', function(m) { alert(m); doLogout(); });
+  socket.on('account_status', function(d) {
+    isMod = d.mod; isMuted = d.muted;
+    if (d.admin) isAdmin = d.admin;
+    if (isMod || isAdmin) document.getElementById('admin-wrist-item').style.display = 'block';
+    if (isMuted) showNotif('You are muted', 'Cannot send chat messages', 3500);
+  });
+  socket.on('you_muted', function(m) { isMuted = m; showNotif(m ? 'You have been muted' : 'You have been unmuted', '', 3000); });
+  socket.on('you_warned', function(d) { showNotif('Warning from ' + d.by, d.reason + ' (Warning #' + d.count + ')', 5000); });
+  socket.on('visit_request_received', function(d) {
+    showNotif('Home Visit Request', d.fromUsername + ' wants to visit your apartment', [
+      { l: 'Accept', fn: function() { socket.emit('visit_accept', { token: token, fromUsername: d.fromUsername }); } },
+      { l: 'Decline', cls: 'sb-r', fn: function() { socket.emit('visit_decline', { token: token, fromUsername: d.fromUsername }); } }
+    ]);
+  });
+  socket.on('visit_guest_arriving', function(d) { showNotif(d.fromUsername + ' is on their way', 'They are visiting your apartment!', 2500); });
+  socket.on('visit_teleport', function(d) { camera.position.set(d.x, d.y + 2, d.z); showNotif('Visiting ' + d.toUsername, 'You have been teleported!', 2500); });
+  socket.on('visit_declined', function(d) { showNotif('Visit declined', d.by + ' declined your request', 3000); });
+  socket.on('visit_error', function(m) { showNotif(m, '', 2500); });
+  socket.on('visit_sent', function(u) { showNotif('Visit request sent', 'Waiting for ' + u + '...', 3000); });
+  socket.on('emote', function(d) { var rp = findRemoteByUsername(d.username); if (rp) playEmote(rp, d.emote); });
+  socket.on('collected', function(d) {
+    var orb = collectibleOrbs.find(function(o) { return o.userData.orbId === d.orbId; });
+    if (orb) { orb.visible = false; setTimeout(function() { orb.visible = true; }, 8000); }
+    if (d.username !== myUsername) showNotif(d.username + ' collected an orb!', '', 2000);
+  });
+  socket.on('coins', function(d) { myCoins = d.coins; updateCoinUI(); });
+  socket.on('leaderboard', renderLeaderboard);
+  socket.on('tag_state', function(d) { tagState = d; renderTagUI(); });
+  socket.on('tag_announce', function(m) { showNotif('Tag', m, 3000); });
+  socket.on('tag_error', function(m) { showNotif(m, '', 2200); });
+  socket.on('tag_ended', function(d) { showNotif('Tag Over', d.reason + (d.lastIt ? ' Last IT: ' + d.lastIt : ''), 4000); tagState = { active: false }; renderTagUI(); });
+  socket.on('token_invalid', function() { clearSession(); });
+
+  socket.on('connect', function() {
+    var s = loadSession();
+    if (s && s.token && s.username) socket.emit('token_login', { token: s.token });
+  });
+}
+
+// ==================== WORLD ====================
+function enterWorld() {
+  document.getElementById('start-screen').classList.add('hidden');
+  document.getElementById('game-wrap').style.display = 'block';
+  if (isAdmin || isMod) document.getElementById('admin-wrist-item').style.display = 'block';
+  document.getElementById('wrist-uname').textContent = myUsername;
+  document.getElementById('profile-name').textContent = myUsername;
+  document.getElementById('profile-role').textContent = isAdmin ? 'Admin' : (isMod ? 'Moderator' : 'Explorer');
+  document.getElementById('profile-avatar').textContent = myUsername[0].toUpperCase();
+  document.getElementById('profile-avatar').style.background = myColor;
+  initThree();
+  loadSettings();
+  initColorPicker();
+  socket.emit('join_world', { token: token });
+  socket.emit('leaderboard');
+  document.getElementById('coin-counter').classList.add('show');
+}
+
+function initThree() {
+  var c = document.getElementById('c');
+  c.width = innerWidth; c.height = innerHeight;
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x87ceeb);
+  scene.fog = new THREE.FogExp2(0xb0d8e8, 0.008);
+  camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.05, 300);
+  camera.position.set(0, 2, 8);
+  camera.rotation.order = 'YXZ';
+  var isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || navigator.maxTouchPoints > 1;
+  renderer = new THREE.WebGLRenderer({ canvas: c, antialias: !isMobile, powerPreference: 'high-performance' });
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.setPixelRatio(isMobile ? Math.min(devicePixelRatio, 1.5) : Math.min(devicePixelRatio, 2));
+  renderer.shadowMap.enabled = !isMobile;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.1;
+
+  var amb = new THREE.AmbientLight(0xffffff, 0.7);
+  scene.add(amb);
+  sunMesh = new THREE.DirectionalLight(0xfff5e0, 1.5);
+  sunMesh.position.set(60, 120, 40);
+  sunMesh.castShadow = true;
+  sunMesh.shadow.mapSize.width = 2048;
+  sunMesh.shadow.mapSize.height = 2048;
+  sunMesh.shadow.camera.near = 0.5;
+  sunMesh.shadow.camera.far = 300;
+  sunMesh.shadow.camera.left = -80;
+  sunMesh.shadow.camera.right = 80;
+  sunMesh.shadow.camera.top = 80;
+  sunMesh.shadow.camera.bottom = -80;
+  sunMesh.shadow.bias = -0.0005;
+  scene.add(sunMesh);
+  var sky2 = new THREE.DirectionalLight(0x88aaff, 0.3);
+  sky2.position.set(-30, 60, -20);
+  scene.add(sky2);
+
+  gltfLoader = (typeof THREE !== 'undefined' && THREE.GLTFLoader) ? new THREE.GLTFLoader() : null;
+  initModelSystem();
+  buildPark();
+  spawnCollectibles();
+  setupInput();
+  setupMobileControls();
+
+  clock = new THREE.Clock();
+  (function loop() {
+    animId = requestAnimationFrame(loop);
+    var dt = Math.min(clock.getDelta(), 0.05);
+    lastFrameDt = dt;
+    t3 += dt;
+    handleMove(dt);
+    animScene(t3);
+    updateLabels();
+    drawMinimap();
+    checkCollectibles();
+    updateDayNight(dt);
+    if (tagState.active) {
+      tagState.msLeft = Math.max(0, (tagState.msLeft || 0) - dt * 1000);
+      if (document.getElementById('tag-panel').classList.contains('open')) renderTagUI();
+      else showTagHud();
+    }
+    renderer.render(scene, camera);
+  })();
+
+  window.addEventListener('resize', function() {
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+    c.width = innerWidth; c.height = innerHeight;
+  });
+}
+
+// ==================== DAY / NIGHT ====================
+function updateDayNight(dt) {
+  dayNightT += dt * 0.008;
+  if (dayNightT > 1) dayNightT -= 1;
+  var phase = Math.sin(dayNightT * Math.PI * 2);
+  var dayMix = (phase + 1) / 2;
+  if (sunMesh) {
+    var angle = dayNightT * Math.PI * 2;
+    sunMesh.position.set(Math.cos(angle) * 100, Math.sin(angle) * 100 + 20, 40);
+    sunMesh.intensity = 0.3 + dayMix * 1.4;
+  }
+  if (scene.background) {
+    var r = 0x87 / 255 * (0.3 + dayMix * 0.7) + 0x0a / 255 * (1 - dayMix) * 0.5;
+    var g = 0xce / 255 * (0.3 + dayMix * 0.7) + 0x1a / 255 * (1 - dayMix) * 0.5;
+    var b = 0xeb / 255 * (0.3 + dayMix * 0.7) + 0x3a / 255 * (1 - dayMix) * 0.5;
+    scene.background.setRGB(r, g, b);
+  }
+}
+
+// ==================== MODEL LOADING ====================
+function initModelSystem() {
+  if (!gltfLoader) return;
+  var models = ['Tree_1_A_Color1','Tree_1_B_Color1','Tree_1_C_Color1','Tree_2_A_Color1','Tree_2_C_Color1','Tree_3_A_Color1','Tree_Bare_1_A_Color1','Bush_1_A_Color1','Bush_2_B_Color1','Grass_1_A_Color1','Grass_2_A_Color1','Rock_1_A_Color1','Rock_2_C_Color1','Rock_3_A_Color1'];
+  models.forEach(function(name) {
+    gltfLoader.load('/models/nature/' + name + '.gltf', function(gltf) {
+      modelCache[name] = gltf.scene;
+    }, undefined, function() {});
+  });
+}
+
+function placeModel(name, x, y, z, scale, rotY) {
+  scale = scale || 1; rotY = rotY || 0;
+  if (modelCache[name]) {
+    var m = modelCache[name].clone();
+    m.position.set(x, y, z);
+    m.scale.set(scale, scale, scale);
+    m.rotation.y = rotY;
+    m.traverse(function(c) { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
+    scene.add(m);
+    return m;
+  }
+  return null;
+}
+
+// ==================== BUILD PARK ====================
+function buildPark() {
+  var groundGeo = new THREE.PlaneGeometry(300, 300, 60, 60);
+  var pos = groundGeo.attributes.position;
+  for (var i = 0; i < pos.count; i++) {
+    var x = pos.getX(i), z = pos.getZ(i);
+    var h = Math.sin(x * 0.05) * 0.6 + Math.cos(z * 0.07) * 0.5 + Math.sin(x * 0.12 + z * 0.09) * 0.25;
+    pos.setY(i, h);
+  }
+  groundGeo.computeVertexNormals();
+  var ground = new THREE.Mesh(groundGeo, new THREE.MeshLambertMaterial({ color: 0x4a7a3a }));
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  var pathMat = new THREE.MeshLambertMaterial({ color: 0xc4a878 });
+  var path = new THREE.Mesh(new THREE.PlaneGeometry(6, 140), pathMat);
+  path.rotation.x = -Math.PI / 2; path.position.y = 0.02; scene.add(path);
+  var path2 = new THREE.Mesh(new THREE.PlaneGeometry(140, 6), pathMat);
+  path2.rotation.x = -Math.PI / 2; path2.position.y = 0.02; scene.add(path2);
+
+  makeFountain(0, 0, 0);
+
+  var benchSpots = [[12,0,0],[-12,0,0],[0,0,12],[0,0,-12],[18,0,18],[-18,0,18],[18,0,-18],[-18,0,-18]];
+  benchSpots.forEach(function(b) { makeBench(b[0], 0, b[2]); });
+
+  for (var i = -3; i <= 3; i++) {
+    if (i === 0) continue;
+    makeLantern(i * 12, 0, 5);
+    makeLantern(i * 12, 0, -5);
+    makeLantern(5, 0, i * 12);
+    makeLantern(-5, 0, i * 12);
+  }
+
+  // Trees — use GLTF models from /models/nature, fall back to procedural
+  var treePositions = [];
+  for (var i = 0; i < 35; i++) {
+    var angle = (i / 35) * Math.PI * 2;
+    var r = 18 + Math.random() * 55;
+    var tx = Math.cos(angle) * r + (Math.random() - 0.5) * 14;
+    var tz = Math.sin(angle) * r + (Math.random() - 0.5) * 14;
+    if (Math.abs(tx) < 5 && Math.abs(tz) < 70) continue;
+    if (Math.abs(tz) < 5 && Math.abs(tx) < 70) continue;
+    treePositions.push([tx, tz]);
+  }
+  for (var i = 0; i < 10; i++) {
+    treePositions.push([(Math.random() - 0.5) * 50 + 40, (Math.random() - 0.5) * 50]);
+  }
+  var treeModelNames = ['Tree_1_A_Color1','Tree_1_B_Color1','Tree_1_C_Color1','Tree_2_A_Color1','Tree_2_C_Color1','Tree_3_A_Color1','Tree_Bare_1_A_Color1'];
+  treePositions.forEach(function(tp) {
+    var sc = 0.8 + Math.random() * 0.6;
+    var rot = Math.random() * Math.PI * 2;
+    var placed = placeModel(treeModelNames[Math.floor(Math.random() * treeModelNames.length)], tp[0], 0, tp[1], sc, rot);
+    if (!placed) makeTree(tp[0], 0, tp[1], 0.7 + Math.random() * 0.8);
+    treeMeshes.push({ x: tp[0], z: tp[1], r: 1.5 });
+  });
+
+  // Bushes
+  var bushNames = ['Bush_1_A_Color1','Bush_2_B_Color1'];
+  for (var i = 0; i < 20; i++) {
+    var a = Math.random() * Math.PI * 2, r = 6 + Math.random() * 45;
+    var placed = placeModel(bushNames[i % 2], Math.cos(a) * r, 0, Math.sin(a) * r, 0.6 + Math.random() * 0.4, Math.random() * Math.PI * 2);
+    if (!placed) makeBush(Math.cos(a) * r, 0, Math.sin(a) * r);
+  }
+
+  // Grass patches
+  var grassNames = ['Grass_1_A_Color1','Grass_2_A_Color1'];
+  for (var i = 0; i < 30; i++) {
+    var a = Math.random() * Math.PI * 2, r = 3 + Math.random() * 50;
+    var placed = placeModel(grassNames[i % 2], Math.cos(a) * r, 0, Math.sin(a) * r, 0.5 + Math.random() * 0.5, Math.random() * Math.PI * 2);
+    if (!placed) makeGrassClump(Math.cos(a) * r, 0, Math.sin(a) * r);
+  }
+
+  // Rocks
+  var rockNames = ['Rock_1_A_Color1','Rock_2_C_Color1','Rock_3_A_Color1'];
+  for (var i = 0; i < 15; i++) {
+    var a = Math.random() * Math.PI * 2, r = 12 + Math.random() * 40;
+    var rx = Math.cos(a) * r, rz = Math.sin(a) * r;
+    var placed = placeModel(rockNames[i % 3], rx, 0, rz, 0.5 + Math.random() * 0.8, Math.random() * Math.PI * 2);
+    if (!placed) {
+      var rs = 0.4 + Math.random() * 1.0;
+      var rock = new THREE.Mesh(new THREE.DodecahedronGeometry(rs, 0), new THREE.MeshLambertMaterial({ color: 0x8a8a8a }));
+      rock.position.set(rx, rs * 0.3, rz);
+      rock.rotation.set(Math.random(), Math.random(), Math.random());
+      rock.castShadow = true; rock.receiveShadow = true;
+      scene.add(rock);
+    }
+  }
+
+  // Wildflowers
+  for (var i = 0; i < 40; i++) {
+    var a = Math.random() * Math.PI * 2, r = 4 + Math.random() * 55;
+    var fx = Math.cos(a) * r, fz = Math.sin(a) * r;
+    var stem = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.3, 5), new THREE.MeshLambertMaterial({ color: 0x3a6a1a }));
+    stem.position.set(fx, 0.15, fz); scene.add(stem);
+    var flowerColors = [0xffdd44, 0xff9933, 0xffffff, 0xffaacc, 0x88ddff];
+    var head = new THREE.Mesh(new THREE.SphereGeometry(0.1, 6, 6), new THREE.MeshLambertMaterial({ color: flowerColors[i % flowerColors.length] }));
+    head.position.set(fx, 0.36, fz); scene.add(head);
+  }
+
+  // Clouds
+  for (var i = 0; i < 8; i++) {
+    var cloud = new THREE.Mesh(new THREE.SphereGeometry(4 + Math.random() * 3, 8, 8), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 }));
+    cloud.position.set((Math.random() - 0.5) * 200, 40 + Math.random() * 20, (Math.random() - 0.5) * 200);
+    cloud.scale.set(2, 0.6, 1.5);
+    scene.add(cloud);
+  }
+
+  // Distant hills
+  var hillMat = new THREE.MeshLambertMaterial({ color: 0x2a5a2a, transparent: true, opacity: 0.8 });
+  for (var i = 0; i < 8; i++) {
+    var mh = 15 + Math.random() * 25;
+    var mt = new THREE.Mesh(new THREE.ConeGeometry(14 + Math.random() * 10, mh, 8), hillMat);
+    var a = (i / 8) * Math.PI * 2;
+    mt.position.set(Math.cos(a) * 140, mh / 2 - 2, Math.sin(a) * 140);
+    scene.add(mt);
+  }
+}
+
+function makeTree(x, y, z, scale) {
+  scale = scale || 1;
+  var trunkH = (1.8 + Math.random() * 1.2) * scale;
+  var trunkR = 0.18 * scale;
+  var trunk = new THREE.Mesh(new THREE.CylinderGeometry(trunkR * 0.7, trunkR, trunkH, 8), new THREE.MeshLambertMaterial({ color: 0x5a3a1a }));
+  trunk.position.set(x, y + trunkH / 2, z); trunk.castShadow = true; scene.add(trunk);
+  var leafColors = [0x2d6a2d, 0x3a7a3a, 0x4a8a3a, 0x256a25];
+  var layers = 2 + Math.floor(Math.random() * 2);
+  for (var i = 0; i < layers; i++) {
+    var lh = (2.5 - i * 0.4) * scale;
+    var lr = (1.4 - i * 0.25) * scale;
+    var leaf = new THREE.Mesh(new THREE.ConeGeometry(lr, lh, 10), new THREE.MeshLambertMaterial({ color: leafColors[i % leafColors.length] }));
+    leaf.position.set(x, y + trunkH + i * 0.9 * scale, z);
+    leaf.castShadow = true; leaf.receiveShadow = true; scene.add(leaf);
+  }
+}
+
+function makeBush(x, y, z) {
+  var r = 0.4 + Math.random() * 0.3;
+  var bush = new THREE.Mesh(new THREE.SphereGeometry(r, 8, 6), new THREE.MeshLambertMaterial({ color: 0x3a7a3a }));
+  bush.position.set(x, y + r * 0.6, z); bush.scale.set(1.5, 0.8, 1.5);
+  bush.castShadow = true; scene.add(bush);
+}
+
+function makeGrassClump(x, y, z) {
+  for (var i = 0; i < 5; i++) {
+    var blade = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.3 + Math.random() * 0.2, 4), new THREE.MeshLambertMaterial({ color: 0x4a8a3a }));
+    blade.position.set(x + (Math.random() - 0.5) * 0.4, y + 0.15, z + (Math.random() - 0.5) * 0.4);
+    scene.add(blade);
+  }
+}
+
+function makeFountain(x, y, z) {
+  var baseMat = new THREE.MeshLambertMaterial({ color: 0xaaaaaa });
+  var base = new THREE.Mesh(new THREE.CylinderGeometry(3, 3.5, 0.4, 24), baseMat);
+  base.position.set(x, y + 0.2, z); base.castShadow = true; scene.add(base);
+  var bowl = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2, 0.6, 24), baseMat);
+  bowl.position.set(x, y + 0.7, z); scene.add(bowl);
+  var water = new THREE.Mesh(new THREE.CircleGeometry(2.3, 32), new THREE.MeshLambertMaterial({ color: 0x4a9adf, transparent: true, opacity: 0.7 }));
+  water.rotation.x = -Math.PI / 2; water.position.set(x, y + 1.01, z); scene.add(water);
+  var pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.25, 1.5, 12), baseMat);
+  pillar.position.set(x, y + 1.5, z); scene.add(pillar);
+  var top = new THREE.Mesh(new THREE.SphereGeometry(0.35, 12, 12), new THREE.MeshLambertMaterial({ color: 0x88aaff }));
+  top.position.set(x, y + 2.4, z); scene.add(top);
+  var fl = new THREE.PointLight(0x4488ff, 1.5, 18);
+  fl.position.set(x, y + 1.5, z); scene.add(fl);
+}
+
+function makeBench(x, y, z) {
+  var woodMat = new THREE.MeshLambertMaterial({ color: 0x8a5a2a });
+  var seat = new THREE.Mesh(new THREE.BoxGeometry(2, 0.1, 0.5), woodMat);
+  seat.position.set(x, y + 0.5, z); seat.castShadow = true; scene.add(seat);
+  var back = new THREE.Mesh(new THREE.BoxGeometry(2, 0.6, 0.1), woodMat);
+  back.position.set(x, y + 0.8, z - 0.2); scene.add(back);
+  for (var i = -1; i <= 1; i += 2) {
+    var leg = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 0.4), woodMat);
+    leg.position.set(x + i * 0.8, y + 0.25, z); scene.add(leg);
+  }
+}
+
+function makeLantern(x, y, z) {
+  var pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 3, 8), new THREE.MeshLambertMaterial({ color: 0x333333 }));
+  pole.position.set(x, y + 1.5, z); pole.castShadow = true; scene.add(pole);
+  var lamp = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 10), new THREE.MeshLambertMaterial({ color: 0xffdd44, emissive: 0xffaa22 }));
+  lamp.position.set(x, y + 3, z); scene.add(lamp);
+  var light = new THREE.PointLight(0xffaa44, 0.8, 10);
+  light.position.set(x, y + 3, z); scene.add(light);
+}
+
+// ==================== COLLECTIBLES ====================
+function spawnCollectibles() {
+  var orbMat = new THREE.MeshLambertMaterial({ color: 0xfacc15, emissive: 0xfacc15, emissiveIntensity: 0.5 });
+  for (var i = 0; i < 12; i++) {
+    var a = Math.random() * Math.PI * 2;
+    var r = 8 + Math.random() * 50;
+    var orb = new THREE.Mesh(new THREE.SphereGeometry(0.35, 12, 12), orbMat.clone());
+    orb.position.set(Math.cos(a) * r, 1 + Math.random() * 0.5, Math.sin(a) * r);
+    orb.castShadow = true;
+    orb.userData.orbId = i;
+    orb.userData.baseY = orb.position.y;
+    scene.add(orb);
+    collectibleOrbs.push(orb);
+  }
+}
+
+function checkCollectibles() {
+  if (!camera) return;
+  var px = camera.position.x, pz = camera.position.z;
+  collectibleOrbs.forEach(function(orb) {
+    if (!orb.visible) return;
+    var dx = orb.position.x - px, dz = orb.position.z - pz;
+    if (dx * dx + dz * dz < 2.5) {
+      orb.visible = false;
+      socket.emit('collect', { token: token, orbId: orb.userData.orbId });
+    }
+  });
+}
+
+// ==================== REMOTE PLAYERS ====================
+function addRemote(id, data) {
+  if (remotePlayers[id]) return;
+  var group = new THREE.Group();
+  var bodyMat = new THREE.MeshLambertMaterial({ color: data.color || '#4ade80' });
+  var body = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 0.8, 6, 12), bodyMat);
+  body.position.y = 0.7; body.castShadow = true; group.add(body);
+  var head = new THREE.Mesh(new THREE.SphereGeometry(0.25, 12, 12), bodyMat);
+  head.position.y = 1.5; head.castShadow = true; group.add(head);
+  group.position.set(data.x, data.y + 0.06, data.z);
+  group.rotation.y = data.rotY || 0;
+  group.userData = { bodyMat: bodyMat, anim: 'idle', baseY: 0, animT: 0 };
+  scene.add(group);
+  var lbl = makeLabel(data.username, data.color || '#4ade80');
+  lbl.position.copy(group.position);
+  lbl.position.y += 2.2;
+  scene.add(lbl);
+  remotePlayers[id] = { username: data.username, color: data.color, mesh: group, lbl: lbl };
+}
+
+function makeLabel(text, color) {
+  var canvas = document.createElement('canvas');
+  canvas.width = 256; canvas.height = 64;
+  var ctx = canvas.getContext('2d');
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillRect(0, 0, 256, 64);
+  ctx.font = 'bold 28px Segoe UI';
+  ctx.fillStyle = color || '#fff';
+  ctx.textAlign = 'center';
+  ctx.fillText(text, 128, 40);
+  var tex = new THREE.CanvasTexture(canvas);
+  var mat = new THREE.SpriteMaterial({ map: tex, depthTest: false });
+  var spr = new THREE.Sprite(mat);
+  spr.scale.set(2, 0.5, 1);
+  return spr;
+}
+
+function updateLabels() {
+  for (var id in remotePlayers) {
+    var rp = remotePlayers[id];
+    if (rp.lbl) {
+      rp.lbl.position.copy(rp.mesh.position);
+      rp.lbl.position.y += 2.2;
+    }
+  }
+}
+
+// ==================== ANIMATION ====================
+function animScene(t) {
+  // Float collectible orbs
+  collectibleOrbs.forEach(function(orb, i) {
+    if (orb.visible) orb.position.y = orb.userData.baseY + Math.sin(t * 2 + i) * 0.2;
+  });
+  // Animate remote players
+  for (var id in remotePlayers) {
+    var rp = remotePlayers[id];
+    var ud = rp.mesh.userData;
+    if (ud.anim === 'walk') {
+      ud.animT += lastFrameDt * 8;
+      rp.mesh.position.y = (rp.mesh.userData.baseY || 0) + Math.abs(Math.sin(ud.animT)) * 0.15;
+    } else {
+      rp.mesh.position.y = rp.mesh.userData.baseY || 0;
+    }
+  }
+}
+
+function playEmote(rp, emote) {
+  if (!rp || !rp.mesh) return;
+  var ud = rp.mesh.userData;
+  if (emote === 'jump') {
+    var startY = ud.baseY || 0;
+    var t0 = t3;
+    (function jump() {
+      var p = (t3 - t0) / 0.6;
+      if (p >= 1) { rp.mesh.position.y = startY; return; }
+      rp.mesh.position.y = startY + Math.sin(p * Math.PI) * 1.5;
+      requestAnimationFrame(jump);
+    })();
+  } else if (emote === 'wave') {
+    showNotif(rp.username + ' waved', '', 2000);
+  } else if (emote === 'dance') {
+    showNotif(rp.username + ' is dancing', '', 2000);
+  } else if (emote === 'sit') {
+    ud.baseY = -0.3;
+    showNotif(rp.username + ' sat down', '', 2000);
+  }
+}
+
+// ==================== MOVEMENT ====================
+function setupInput() {
+  document.addEventListener('keydown', function(e) {
+    keys[e.key.toLowerCase()] = true;
+    if (e.key === 'Shift') isSprinting = true;
+    if (e.key === '/' || e.key === 'Enter') {
+      var ci = document.getElementById('chat-input');
+      if (document.activeElement !== ci) { e.preventDefault(); ci.focus(); }
+    }
+  });
+  document.addEventListener('keyup', function(e) {
+    keys[e.key.toLowerCase()] = false;
+    if (e.key === 'Shift') isSprinting = false;
+  });
+  document.addEventListener('mousemove', function(e) {
+    if (document.pointerLockElement) {
+      yaw -= e.movementX * 0.002 * sensitivity;
+      pitch -= e.movementY * 0.002 * sensitivity;
+      pitch = Math.max(-1.4, Math.min(1.4, pitch));
+    }
+  });
+  document.getElementById('c').addEventListener('click', function() {
+    if (document.activeElement.tagName !== 'INPUT') document.body.requestPointerLock();
+  });
+}
+
+function setupMobileControls() {
+  var isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || navigator.maxTouchPoints > 1;
+  if (!isMobile) return;
+  var joy = document.getElementById('joy-outer');
+  joy.style.display = 'block';
+  var inner = document.getElementById('joy-inner');
+  var cx, cy;
+  joy.addEventListener('touchstart', function(e) {
+    e.preventDefault();
+    joyActive = true;
+    var t = e.touches[0];
+    var rect = joy.getBoundingClientRect();
+    cx = rect.left + rect.width / 2;
+    cy = rect.top + rect.height / 2;
+  });
+  joy.addEventListener('touchmove', function(e) {
+    e.preventDefault();
+    if (!joyActive) return;
+    var t = e.touches[0];
+    var dx = t.clientX - cx, dy = t.clientY - cy;
+    var dist = Math.min(Math.sqrt(dx * dx + dy * dy), 50);
+    var ang = Math.atan2(dy, dx);
+    joyVec.x = Math.cos(ang) * (dist / 50);
+    joyVec.y = Math.sin(ang) * (dist / 50);
+    inner.style.left = (38 + joyVec.x * 30) + 'px';
+    inner.style.top = (38 + joyVec.y * 30) + 'px';
+  });
+  joy.addEventListener('touchend', function(e) {
+    joyActive = false;
+    joyVec.x = 0; joyVec.y = 0;
+    inner.style.left = '38px'; inner.style.top = '38px';
+  });
+  // Touch look
+  var lookTouch = null;
+  document.addEventListener('touchstart', function(e) {
+    for (var i = 0; i < e.touches.length; i++) {
+      var t = e.touches[i];
+      if (t.clientX > innerWidth * 0.5 && t.clientY < innerHeight * 0.7 && !lookTouch) {
+        lookTouch = { id: t.identifier, x: t.clientX, y: t.clientY };
+      }
+    }
+  });
+  document.addEventListener('touchmove', function(e) {
+    if (!lookTouch) return;
+    for (var i = 0; i < e.touches.length; i++) {
+      var t = e.touches[i];
+      if (t.identifier === lookTouch.id) {
+        yaw -= (t.clientX - lookTouch.x) * 0.005 * sensitivity;
+        pitch -= (t.clientY - lookTouch.y) * 0.005 * sensitivity;
+        pitch = Math.max(-1.4, Math.min(1.4, pitch));
+        lookTouch.x = t.clientX; lookTouch.y = t.clientY;
+      }
+    }
+  });
+  document.addEventListener('touchend', function(e) {
+    for (var i = 0; i < e.touches.length; i++) {
+      if (e.touches[i].identifier === lookTouch.id) { lookTouch = null; break; }
+    }
+  });
+}
+
+function handleMove(dt) {
+  if (!camera) return;
+  var speed = moveSpeed * (isSprinting ? 1.8 : 1);
+  var fwd = 0, strafe = 0;
+  if (keys['w'] || keys['arrowup']) fwd += 1;
+  if (keys['s'] || keys['arrowdown']) fwd -= 1;
+  if (keys['a'] || keys['arrowleft']) strafe -= 1;
+  if (keys['d'] || keys['arrowright']) strafe += 1;
+  if (joyActive) { fwd -= joyVec.y; strafe += joyVec.x; }
+
+  var len = Math.sqrt(fwd * fwd + strafe * strafe);
+  var moving = len > 0.01;
+  if (moving) { fwd /= len; strafe /= len; }
+
+  var cosY = Math.cos(yaw), sinY = Math.sin(yaw);
+  var dx = (-strafe * cosY + fwd * sinY) * speed * dt;
+  var dz = (strafe * sinY + fwd * cosY) * speed * dt;
+
+  var newX = camera.position.x + dx;
+  var newZ = camera.position.z + dz;
+
+  // Collision with trees
+  var blocked = false;
+  for (var i = 0; i < treeMeshes.length; i++) {
+    var t = treeMeshes[i];
+    var tdx = newX - t.x, tdz = newZ - t.z;
+    if (tdx * tdx + tdz * tdz < t.r * t.r) { blocked = true; break; }
+  }
+  if (!blocked && Math.abs(newX) < 145 && Math.abs(newZ) < 145) {
+    camera.position.x = newX;
+    camera.position.z = newZ;
+  }
+  camera.position.y = playerHeight + Math.sin(t3 * (moving ? 8 : 2)) * (moving ? 0.05 : 0.02);
+
+  camera.rotation.y = yaw;
+  camera.rotation.x = pitch;
+
+  // Update HUD
+  document.getElementById('hud-coords').textContent = Math.round(camera.position.x) + ', ' + Math.round(camera.position.z);
+
+  // Send position to server
+  if (socket && token) {
+    socket.emit('move', {
+      x: camera.position.x, y: 0, z: camera.position.z, rotY: yaw,
+      anim: moving ? (isSprinting ? 'run' : 'walk') : 'idle'
+    });
+  }
+}
+
+// ==================== MINIMAP ====================
+function drawMinimap() {
+  var c = document.getElementById('minimap');
+  var ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, 140, 140);
+  ctx.fillStyle = 'rgba(74,122,58,0.6)';
+  ctx.fillRect(0, 0, 140, 140);
+  var scale = 0.5;
+  var cx = 70, cy = 70;
+  // Trees
+  ctx.fillStyle = 'rgba(45,106,45,0.8)';
+  treeMeshes.forEach(function(t) {
+    var mx = cx + t.x * scale, my = cy + t.z * scale;
+    if (mx > 0 && mx < 140 && my > 0 && my < 140) ctx.fillRect(mx - 1, my - 1, 3, 3);
+  });
+  // Remote players
+  for (var id in remotePlayers) {
+    var rp = remotePlayers[id];
+    ctx.fillStyle = rp.color || '#4ade80';
+    ctx.beginPath();
+    ctx.arc(cx + rp.mesh.position.x * scale, cy + rp.mesh.position.z * scale, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Self
+  if (camera) {
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(cx + camera.position.x * scale, cy + camera.position.z * scale, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#f87171';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+}
+
+// ==================== CHAT ====================
+function sendChat() {
+  var inp = document.getElementById('chat-input');
+  var msg = inp.value.trim();
+  if (!msg) return;
+  socket.emit('chat', { token: token, message: msg });
+  inp.value = '';
+}
+function addChatMsg(d) {
+  var box = document.getElementById('chat-messages');
+  var div = document.createElement('div');
+  div.className = 'chat-msg';
+  var badge = d.admin ? ' [Admin]' : (d.mod ? ' [Mod]' : '');
+  div.innerHTML = '<span class="uname" style="color:' + (d.color || '#fff') + '">' + d.username + badge + '</span>: ' + d.message.replace(/</g, '&lt;');
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+  while (box.children.length > 50) box.removeChild(box.firstChild);
+}
+
+// ==================== EMOTES ====================
+function sendEmote(emote) {
+  if (socket && token) socket.emit('emote', { token: token, emote: emote });
+}
+
+// ==================== UI ====================
+function updateHUD() {
+  var count = 1 + Object.keys(remotePlayers).length;
+  document.getElementById('hud-players').textContent = count + (count === 1 ? ' player' : ' players');
+}
+function updateCoinUI() {
+  document.getElementById('coin-counter').textContent = myCoins + ' coins';
+  document.getElementById('wrist-coins').textContent = myCoins + ' coins';
+  document.getElementById('stat-coins').textContent = myCoins;
+}
+function toggleWrist() {
+  document.getElementById('wrist-panel').classList.toggle('open');
+}
+function closeWrist() {
+  document.getElementById('wrist-panel').classList.remove('open');
+}
+function openPanel(id) {
+  document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('open'); });
+  document.getElementById(id).classList.add('open');
+  if (id === 'friends-panel') renderFriends();
+  if (id === 'leaderboard-panel') socket.emit('leaderboard');
+  if (id === 'admin-panel') socket.emit('admin_list', { token: token });
+  if (id === 'profile-panel') {
+    document.getElementById('stat-friends').textContent = (friendData.friends || []).length;
+  }
+}
+function closePanel(id) {
+  document.getElementById(id).classList.remove('open');
+}
+
+function showNotif(title, body, timeout, actions) {
+  var container = document.getElementById('notif');
+  var card = document.createElement('div');
+  card.className = 'notif-card';
+  var html = '<div class="notif-title">' + title + '</div>';
+  if (body) html += '<div class="notif-body">' + body + '</div>';
+  if (actions && actions.length) {
+    html += '<div class="notif-actions">';
+    actions.forEach(function(a) {
+      html += '<button class="notif-btn' + (a.cls ? ' ' + a.cls : '') + '" data-act="' + a.l + '">' + a.l + '</button>';
+    });
+    html += '</div>';
+  }
+  card.innerHTML = html;
+  if (actions && actions.length) {
+    card.querySelectorAll('.notif-btn').forEach(function(btn, i) {
+      btn.onclick = function() { actions[i].fn(); card.remove(); };
+    });
+  }
+  container.appendChild(card);
+  setTimeout(function() { if (card.parentNode) card.remove(); }, timeout || 3000);
+}
+
+// ==================== FRIENDS ====================
+function sendFriendRequest() {
+  var u = document.getElementById('friend-input').value.trim();
+  if (!u) return;
+  socket.emit('friend_request', { token: token, toUsername: u });
+  document.getElementById('friend-input').value = '';
+}
+function renderFriends() {
+  var reqEl = document.getElementById('friend-requests');
+  var listEl = document.getElementById('friend-list');
+  var reqs = friendData.requests || [];
+  var friends = friendData.friends || [];
+  reqEl.innerHTML = '';
+  listEl.innerHTML = '';
+  if (reqs.length) {
+    reqEl.innerHTML = '<div style="font-size:12px;color:#94a3b8;margin-bottom:8px">Pending Requests</div>';
+    reqs.forEach(function(u) {
+      var row = document.createElement('div');
+      row.className = 'friend-row';
+      row.innerHTML = '<div class="friend-avatar" style="background:' + stringToColor(u) + '">' + u[0].toUpperCase() + '</div>' +
+        '<div><div class="friend-name">' + u + '</div><div class="friend-status">Wants to be friends</div></div>' +
+        '<div class="friend-actions"><button class="friend-act-btn accept" onclick="acceptFriend(\'' + u + '\')">Accept</button>' +
+        '<button class="friend-act-btn deny" onclick="declineFriend(\'' + u + '\')">Deny</button></div>';
+      reqEl.appendChild(row);
+    });
+  }
+  if (friends.length) {
+    listEl.innerHTML = '<div style="font-size:12px;color:#94a3b8;margin:8px 0">Your Friends</div>';
+    friends.forEach(function(u) {
+      var online = Object.values(remotePlayers).some(function(rp) { return rp.username === u; });
+      var row = document.createElement('div');
+      row.className = 'friend-row';
+      row.innerHTML = '<div class="friend-avatar" style="background:' + stringToColor(u) + '">' + u[0].toUpperCase() + '</div>' +
+        '<div><div class="friend-name">' + u + '</div><div class="friend-status">' + (online ? 'Online' : 'Offline') + '</div></div>' +
+        '<div class="friend-actions">' +
+        (online ? '<button class="friend-act-btn" onclick="visitFriend(\'' + u + '\')">Visit</button>' : '') +
+        '<button class="friend-act-btn deny" onclick="removeFriend(\'' + u + '\')">Remove</button></div>';
+      listEl.appendChild(row);
+    });
+  }
+  if (!reqs.length && !friends.length) {
+    listEl.innerHTML = '<div style="color:#64748b;font-size:13px;text-align:center;padding:20px">No friends yet. Add someone!</div>';
+  }
+}
+function acceptFriend(u) { socket.emit('friend_accept', { token: token, fromUsername: u }); }
+function declineFriend(u) { socket.emit('friend_decline', { token: token, fromUsername: u }); }
+function removeFriend(u) { socket.emit('friend_remove', { token: token, friendUsername: u }); }
+function visitFriend(u) { socket.emit('visit_request', { token: token, toUsername: u }); }
+function updateWristFriends() {
+  document.getElementById('wrist-friends').textContent = (friendData.friends || []).length;
+}
+
+// ==================== LEADERBOARD ====================
+function renderLeaderboard(board) {
+  var el = document.getElementById('leaderboard-list');
+  if (!board || !board.length) {
+    el.innerHTML = '<div style="color:#64748b;font-size:13px;text-align:center;padding:20px">No coins collected yet. Go find some orbs!</div>';
+    return;
+  }
+  el.innerHTML = '';
+  board.forEach(function(p, i) {
+    var row = document.createElement('div');
+    row.className = 'lb-row';
+    var medal = i === 0 ? '🥇' : (i === 1 ? '🥈' : (i === 2 ? '🥉' : '#' + (i + 1)));
+    row.innerHTML = '<div class="lb-rank">' + medal + '</div>' +
+      '<div class="lb-name" style="color:' + stringToColor(p.username) + '">' + p.username + '</div>' +
+      '<div class="lb-coins">' + p.coins + ' coins</div>';
+    el.appendChild(row);
+  });
+}
+
+// ==================== COLOR PICKER ====================
+function initColorPicker() {
+  var colors = ['#f87171','#fb923c','#facc15','#4ade80','#34d399','#22d3ee','#38bdf8','#60a5fa','#a78bfa','#e879f9','#f472b6','#ffffff','#94a3b8','#475569'];
+  var picker = document.getElementById('color-picker');
+  picker.innerHTML = '';
+  colors.forEach(function(c) {
+    var sw = document.createElement('div');
+    sw.className = 'color-swatch' + (c === myColor ? ' active' : '');
+    sw.style.background = c;
+    sw.onclick = function() {
+      myColor = c;
+      socket.emit('set_color', { token: token, color: c });
+      saveSettings();
+      document.querySelectorAll('.color-swatch').forEach(function(s) { s.classList.remove('active'); });
+      sw.classList.add('active');
+      document.getElementById('profile-avatar').style.background = c;
+    };
+    picker.appendChild(sw);
+  });
+}
+
+// ==================== TAG ====================
+function startTag() { socket.emit('tag_start', { token: token }); }
+function joinTag() { socket.emit('tag_join', { token: token }); }
+function stopTag() { socket.emit('tag_stop', { token: token }); }
+function renderTagUI() {
+  var el = document.getElementById('tag-info');
+  var hud = document.getElementById('tag-hud');
+  if (!tagState.active) {
+    el.innerHTML = '<div style="color:#64748b;font-size:13px">No game running. Click Start to begin!</div>';
+    hud.classList.remove('show');
+    return;
+  }
+  el.innerHTML = '<div style="background:rgba(255,255,255,.05);border-radius:12px;padding:14px">' +
+    '<div style="font-size:14px;font-weight:700;margin-bottom:8px">Game in progress</div>' +
+    '<div style="font-size:13px;color:#f87171">IT: ' + (tagState.itUsername || '—') + '</div>' +
+    '<div style="font-size:13px;color:#94a3b8;margin-top:4px">Players: ' + tagState.participants.length + '</div>' +
+    '<div style="font-size:13px;color:#facc15;margin-top:4px">Time: ' + Math.ceil((tagState.msLeft || 0) / 1000) + 's</div>' +
+    '</div>';
+  hud.classList.add('show');
+  hud.textContent = 'IT: ' + (tagState.itUsername || '—') + ' | ' + Math.ceil((tagState.msLeft || 0) / 1000) + 's';
+}
+function showTagHud() {
+  var hud = document.getElementById('tag-hud');
+  if (tagState.active) {
+    hud.classList.add('show');
+    hud.textContent = 'IT: ' + (tagState.itUsername || '—') + ' | ' + Math.ceil((tagState.msLeft || 0) / 1000) + 's';
+  } else {
+    hud.classList.remove('show');
+  }
+}
+
+// ==================== ADMIN ====================
+function renderAdminList(list) {
+  var el = document.getElementById('admin-list');
+  var statsEl = document.getElementById('admin-stats');
+  if (!list || !list.length) { el.innerHTML = '<div style="color:#64748b;font-size:13px">No users found.</div>'; if (statsEl) statsEl.innerHTML = ''; return; }
+  if (statsEl) {
+    var total = list.length, online = list.filter(function(u){return u.online}).length, banned = list.filter(function(u){return u.banned}).length, muted = list.filter(function(u){return u.muted}).length, warned = list.filter(function(u){return u.warnings>0}).length;
+    statsEl.innerHTML =
+      '<div style="background:rgba(255,255,255,.05);padding:8px 14px;border-radius:10px;text-align:center"><div style="font-size:20px;font-weight:700;color:#fff">' + total + '</div><div style="font-size:10px;color:#94a3b8;text-transform:uppercase">Total</div></div>' +
+      '<div style="background:rgba(74,222,128,.08);padding:8px 14px;border-radius:10px;text-align:center"><div style="font-size:20px;font-weight:700;color:#4ade80">' + online + '</div><div style="font-size:10px;color:#94a3b8;text-transform:uppercase">Online</div></div>' +
+      '<div style="background:rgba(239,68,68,.08);padding:8px 14px;border-radius:10px;text-align:center"><div style="font-size:20px;font-weight:700;color:#f87171">' + banned + '</div><div style="font-size:10px;color:#94a3b8;text-transform:uppercase">Banned</div></div>' +
+      '<div style="background:rgba(148,163,184,.08);padding:8px 14px;border-radius:10px;text-align:center"><div style="font-size:20px;font-weight:700;color:#94a3b8">' + muted + '</div><div style="font-size:10px;color:#94a3b8;text-transform:uppercase">Muted</div></div>' +
+      '<div style="background:rgba(250,204,21,.08);padding:8px 14px;border-radius:10px;text-align:center"><div style="font-size:20px;font-weight:700;color:#facc15">' + warned + '</div><div style="font-size:10px;color:#94a3b8;text-transform:uppercase">Warned</div></div>';
+  }
+  el.innerHTML = '';
+  list.forEach(function(u) {
+    var row = document.createElement('div');
+    row.className = 'admin-row';
+    var badges = '';
+    if (u.admin) badges += '<span class="admin-badge" style="background:rgba(248,113,113,.3)">Admin</span>';
+    if (u.mod) badges += '<span class="admin-badge" style="background:rgba(250,204,21,.25)">Mod</span>';
+    if (u.banned) badges += '<span class="admin-badge" style="background:rgba(239,68,68,.3)">Banned</span>';
+    if (u.muted) badges += '<span class="admin-badge" style="background:rgba(148,163,184,.2)">Muted</span>';
+    if (u.online) badges += '<span class="admin-badge" style="background:rgba(74,222,128,.2)">Online</span>';
+    if (u.warnings > 0) badges += '<span class="admin-badge" style="background:rgba(250,204,21,.15)">Warnings: ' + u.warnings + '</span>';
+    var info = '<span style="color:#94a3b8;font-size:11px">Coins: ' + (u.coins||0) + '</span>';
+    if (u.created_at) { var d = new Date(u.created_at); info += '<span style="color:#64748b;font-size:11px;margin-left:8px">Joined ' + d.toLocaleDateString() + '</span>'; }
+    var actions = '';
+    if (isAdmin) {
+      actions += '<button class="admin-btn" onclick="adminAct(\'makemod\',\'' + u.username + '\')">Mod+</button>';
+      actions += '<button class="admin-btn" onclick="adminAct(\'removemod\',\'' + u.username + '\')">Mod-</button>';
+      actions += '<button class="admin-btn" onclick="adminAct(\'makeadmin\',\'' + u.username + '\')">Admin+</button>';
+      actions += '<button class="admin-btn" onclick="adminAct(\'removeadmin\',\'' + u.username + '\')">Admin-</button>';
+    }
+    actions += '<button class="admin-btn warn" onclick="adminAct(\'warn\',\'' + u.username + '\')">Warn</button>';
+    actions += '<button class="admin-btn" onclick="adminAct(\'mute\',\'' + u.username + '\')">Mute</button>';
+    actions += '<button class="admin-btn" onclick="adminAct(\'unmute\',\'' + u.username + '\')">Unmute</button>';
+    actions += '<button class="admin-btn" onclick="adminAct(\'kick\',\'' + u.username + '\')">Kick</button>';
+    if (isAdmin) {
+      actions += '<button class="admin-btn danger" onclick="adminAct(\'ban\',\'' + u.username + '\')">Ban</button>';
+      actions += '<button class="admin-btn" onclick="adminAct(\'unban\',\'' + u.username + '\')">Unban</button>';
+      actions += '<button class="admin-btn" onclick="adminAct(\'setcoins\',\'' + u.username + '\')">Set Coins</button>';
+      actions += '<button class="admin-btn" onclick="adminAct(\'addcoins\',\'' + u.username + '\')">Add Coins</button>';
+      actions += '<button class="admin-btn" onclick="adminAct(\'resetwarnings\',\'' + u.username + '\')">Reset Warn</button>';
+      actions += '<button class="admin-btn" onclick="adminAct(\'resetcolor\',\'' + u.username + '\')">Reset Color</button>';
+    }
+    if (u.online) {
+      actions += '<button class="admin-btn" onclick="adminAct(\'teleportto\',\'' + u.username + '\')">TP To</button>';
+      if (isAdmin) actions += '<button class="admin-btn" onclick="adminAct(\'bring\',\'' + u.username + '\')">Bring</button>';
+    }
+    if (isAdmin && u.username !== 'zlati') {
+      actions += '<button class="admin-btn danger" onclick="adminAct(\'deleteaccount\',\'' + u.username + '\')" style="background:rgba(239,68,68,.2);color:#f87171">Delete</button>';
+    }
+    row.innerHTML = '<div class="admin-name">' + u.username + '</div><div style="margin:4px 0">' + info + '</div><div class="admin-badges">' + badges + '</div><div class="admin-actions">' + actions + '</div>';
+    el.appendChild(row);
+  });
+}
+function adminAct(action, target) {
+  var reason = '';
+  if (action === 'warn') reason = prompt('Reason for warning?') || '';
+  else if (action === 'setcoins') { reason = prompt('Set coins to what number?'); if (reason === null) return; if (isNaN(parseInt(reason)) || parseInt(reason) < 0) { alert('Invalid number'); return; } }
+  else if (action === 'addcoins') { reason = prompt('Add how many coins? (use negative to remove)'); if (reason === null) return; if (isNaN(parseInt(reason))) { alert('Invalid number'); return; } }
+  else if (action === 'deleteaccount') { if (!confirm('Permanently delete account "' + target + '"? This cannot be undone.')) return; }
+  socket.emit('admin_action', { token: token, action: action, targetUsername: target, reason: reason });
+}
+function adminSearch() {
+  var q = document.getElementById('admin-search').value.trim();
+  if (!q) return adminListAll();
+  socket.emit('admin_search', { token: token, query: q });
+}
+function adminListAll() {
+  document.getElementById('admin-search').value = '';
+  socket.emit('admin_list', { token: token });
+}
+function adminBroadcast() {
+  var msg = document.getElementById('admin-broadcast').value.trim();
+  if (!msg) return;
+  socket.emit('admin_broadcast', { token: token, message: msg });
+  document.getElementById('admin-broadcast').value = '';
+}
+
+// ==================== HELPERS ====================
+function findRemoteByUsername(u) {
+  for (var id in remotePlayers) { if (remotePlayers[id].username === u) return remotePlayers[id]; }
+  return null;
+}
+function stringToColor(s) {
+  var hash = 0;
+  for (var i = 0; i < s.length; i++) hash = s.charCodeAt(i) + ((hash << 5) - hash);
+  var h = Math.abs(hash) % 360;
+  return 'hsl(' + h + ',65%,55%)';
+}
+
+// ==================== INIT ====================
+initSocket();
+</script>
+</body>
+</html>

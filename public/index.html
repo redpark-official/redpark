@@ -869,8 +869,8 @@ function initThree() {
   css3dRenderer.setSize(innerWidth, innerHeight);
   document.getElementById('css3d-container').appendChild(css3dRenderer.domElement);
   css3dScene = new THREE.Scene();
-  buildJumbotronFrame();
-  buildDjBooth();
+  try { buildJumbotronFrame(); } catch (e) { console.error('[Jumbotron] buildJumbotronFrame failed:', e); }
+  try { buildDjBooth(); } catch (e) { console.error('[DJ Booth] buildDjBooth failed:', e); }
 
   var amb = new THREE.AmbientLight(0xffffff, 0.7);
   scene.add(amb);
@@ -1081,7 +1081,8 @@ function updateJumbotronTransform() {
 
 function setJumbotronSpawned(spawned) {
   jumbotronSpawned = spawned;
-  if (jumbotronFrame) jumbotronFrame.visible = spawned;
+  if (jumbotronFrame) { jumbotronFrame.visible = spawned; console.log('[Jumbotron] visible =', spawned); }
+  else console.error('[Jumbotron] jumbotronFrame was never built — buildJumbotronFrame() may have thrown an error. Check the console above this line.');
   updateJumbotronTransform();
 }
 
@@ -1117,7 +1118,8 @@ function buildDjBooth() {
 
 function setDjBoothSpawned(spawned) {
   djBoothSpawned = spawned;
-  if (djBoothMesh) djBoothMesh.visible = spawned;
+  if (djBoothMesh) { djBoothMesh.visible = spawned; console.log('[DJ Booth] visible =', spawned); }
+  else console.error('[DJ Booth] djBoothMesh was never built — buildDjBooth() may have thrown an error. Check the console above this line.');
 }
 
 function updateDjBooth(t) {
@@ -1795,11 +1797,31 @@ function playEmote(rp, emote) {
       requestAnimationFrame(jump);
     })();
   } else if (emote === 'wave') {
+    var arm = rp.mesh.children[3]; // right arm
+    if (arm) {
+      var baseRot = arm.rotation.x, t0w = t3;
+      (function wave() {
+        var p = (t3 - t0w) / 1.2;
+        if (p >= 1) { arm.rotation.x = baseRot; arm.rotation.z = 0; return; }
+        arm.rotation.x = baseRot - 2.2;
+        arm.rotation.z = Math.sin(p * Math.PI * 6) * 0.4;
+        requestAnimationFrame(wave);
+      })();
+    }
     showNotif(rp.username + ' waved', '', 2000);
   } else if (emote === 'dance') {
+    var startYd = ud.baseY || 0, t0d = t3;
+    (function dance() {
+      var elapsed = t3 - t0d;
+      if (elapsed > 2.4) { rp.mesh.rotation.z = 0; rp.mesh.position.y = startYd; return; }
+      rp.mesh.rotation.z = Math.sin(elapsed * 10) * 0.18;
+      rp.mesh.position.y = startYd + Math.abs(Math.sin(elapsed * 10)) * 0.25;
+      requestAnimationFrame(dance);
+    })();
     showNotif(rp.username + ' is dancing', '', 2000);
   } else if (emote === 'sit') {
     ud.baseY = -0.3;
+    rp.mesh.position.y = -0.3;
     showNotif(rp.username + ' sat down', '', 2000);
   }
 }
@@ -2019,6 +2041,7 @@ function addChatMsg(d) {
 // ==================== EMOTES ====================
 function sendEmote(emote) {
   if (socket && token) socket.emit('emote', { token: token, emote: emote });
+  if (localPlayerRig) playEmote({ mesh: localPlayerRig, username: 'You', baseY: 0 }, emote);
 }
 
 // ==================== UI ====================

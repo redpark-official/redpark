@@ -2325,6 +2325,10 @@ function adminIpBan(username) {
   var reason = prompt('Optional reason for the ban log:') || '';
   socket.emit('admin_action', { token: token, action: 'ip_ban', targetUsername: username, reason: reason });
 }
+function adminDeleteAccount(username) {
+  if (!confirm('Delete ' + username + "'s account permanently? This does NOT block their IP — they can just make a new account. This cannot be undone.")) return;
+  socket.emit('admin_action', { token: token, action: 'delete_account', targetUsername: username });
+}
 
 // ==================== ADMIN ====================
 function renderAdminList(list) {
@@ -2359,6 +2363,7 @@ function renderAdminList(list) {
       actions += '<button class="admin-btn danger" onclick="adminAct(\'ban\',\'' + u.username + '\')">Ban</button>';
       actions += '<button class="admin-btn" onclick="adminAct(\'unban\',\'' + u.username + '\')">Unban</button>';
       actions += '<button class="admin-btn danger" onclick="adminIpBan(\'' + u.username + '\')">🚫 IP Ban + Delete</button>';
+      actions += '<button class="admin-btn danger" onclick="adminDeleteAccount(\'' + u.username + '\')">🗑️ Delete Account</button>';
     }
     row.innerHTML = '<div class="admin-name">' + u.username + '</div><div class="admin-badges">' + badges + '</div><div class="admin-actions">' + actions + '</div>';
     el.appendChild(row);

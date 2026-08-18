@@ -1705,24 +1705,33 @@ function makeMtFuji(x, z) {
 
 function buildJapanZone() {
   var cz = -300;
-  makeMtFuji(0, cz - 130);
-  makePagoda(0, cz - 30);
-  // Approach gates, biggest first, shrinking as you go deeper — classic torii path
-  makeToriiGate(0, japanGateIn.z, 1.15);
-  makeToriiGate(0, cz - 35 + 15, 1.0);
-  makeToriiGate(0, japanGateOut.z, 0.9);
-  // Lanterns lining the path
-  for (var lz = japanGateIn.z; lz > japanGateOut.z; lz -= 12) {
-    makeStoneLantern(-5, lz);
-    makeStoneLantern(5, lz);
-  }
-  // Cherry blossoms scattered off the path
-  for (var i = 0; i < 26; i++) {
-    var tx = (Math.random() - 0.5) * 130;
-    var tz = cz - 90 + Math.random() * 160;
-    if (Math.abs(tx) < 8) continue; // keep the walking path clear
-    makeCherryTree(tx, tz, 0.9 + Math.random() * 0.5);
-  }
+  var steps = [
+    ['Mt Fuji', function() { makeMtFuji(0, cz - 130); }],
+    ['Pagoda', function() { makePagoda(0, cz - 30); }],
+    ['Torii gate 1', function() { makeToriiGate(0, japanGateIn.z, 1.15); }],
+    ['Torii gate 2', function() { makeToriiGate(0, cz - 35 + 15, 1.0); }],
+    ['Torii gate 3', function() { makeToriiGate(0, japanGateOut.z, 0.9); }],
+    ['Lanterns', function() {
+      for (var lz = japanGateIn.z; lz > japanGateOut.z; lz -= 12) {
+        makeStoneLantern(-5, lz);
+        makeStoneLantern(5, lz);
+      }
+    }],
+    ['Cherry blossoms', function() {
+      for (var i = 0; i < 26; i++) {
+        var tx = (Math.random() - 0.5) * 130;
+        var tz = cz - 90 + Math.random() * 160;
+        if (Math.abs(tx) < 8) continue;
+        makeCherryTree(tx, tz, 0.9 + Math.random() * 0.5);
+      }
+    }],
+  ];
+  var builtCount = 0;
+  steps.forEach(function(step) {
+    try { step[1](); builtCount++; console.log('[Japan Zone] built:', step[0]); }
+    catch (e) { console.error('[Japan Zone] FAILED at "' + step[0] + '":', e); }
+  });
+  console.log('[Japan Zone] finished —', builtCount + '/' + steps.length, 'pieces built. Scene children total:', scene.children.length);
 }
 
 function visitJapan() {
@@ -1735,6 +1744,7 @@ function visitJapan() {
     showNotif('🗾 Welcome to Japan', '', 2000);
   }
   japanTeleportCooldown = 2;
+  console.log('[Japan Zone] teleported — playerPos:', playerPos.x, playerPos.z, 'camera will follow next frame');
 }
 
 

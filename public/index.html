@@ -198,6 +198,9 @@ body.compact-ui .emote-btn{width:34px;height:34px;font-size:15px;border-radius:9
       <div class="wrist-item" onclick="openPanel('tag-panel');closeWrist()">
         <span>🎯</span><span>Tag Game</span>
       </div>
+      <div class="wrist-item" onclick="visitJapan();closeWrist()">
+        <span>🗾</span><span>Visit Japan</span>
+      </div>
       <div class="wrist-item" onclick="openPanel('music-panel');closeWrist()">
         <span>🎵</span><span>Music</span>
       </div>
@@ -1238,6 +1241,16 @@ function buildPark() {
   ground.receiveShadow = true;
   scene.add(ground);
 
+  var japanGround = new THREE.Mesh(
+    new THREE.PlaneGeometry(320, 220),
+    new THREE.MeshLambertMaterial({ color: 0x8a7a63 })
+  );
+  japanGround.rotation.x = -Math.PI / 2;
+  japanGround.position.set(0, -0.01, -300);
+  japanGround.receiveShadow = true;
+  scene.add(japanGround);
+  try { buildJapanZone(); } catch (e) { console.error('[Japan Zone] build failed:', e); }
+
   // Darker grass detail patches
   for (var gi = 0; gi < 120; gi++) {
     var ga = Math.random() * Math.PI * 2, gr = Math.random() * 140;
@@ -1586,6 +1599,142 @@ function makeCommunityHall(x, z) {
   var hallLight = new THREE.PointLight(0xfff3c4, 0.6, 20);
   hallLight.position.set(x, 3.6, z);
   scene.add(hallLight);
+}
+
+
+// ==================== JAPAN ZONE ====================
+var japanGateIn = { x: 0, z: -195 }, japanGateOut = { x: 0, z: -335 };
+var japanTeleportCooldown = 0;
+
+function makeToriiGate(x, z, scale) {
+  scale = scale || 1;
+  var grp = new THREE.Group();
+  var redMat = new THREE.MeshLambertMaterial({ color: 0xb3382c });
+  var darkMat = new THREE.MeshLambertMaterial({ color: 0x2b2320 });
+  var pillarH = 5 * scale, pillarR = 0.35 * scale;
+  [-3.2 * scale, 3.2 * scale].forEach(function(px) {
+    var pillar = new THREE.Mesh(new THREE.CylinderGeometry(pillarR, pillarR * 1.15, pillarH, 12), redMat);
+    pillar.position.set(px, pillarH / 2, 0); pillar.castShadow = true; grp.add(pillar);
+  });
+  var topBeam = new THREE.Mesh(new THREE.BoxGeometry(8.6 * scale, 0.5 * scale, 0.9 * scale), redMat);
+  topBeam.position.set(0, pillarH + 0.1 * scale, 0); grp.add(topBeam);
+  var topCap = new THREE.Mesh(new THREE.BoxGeometry(9.4 * scale, 0.35 * scale, 1.2 * scale), darkMat);
+  topCap.position.set(0, pillarH + 0.45 * scale, 0); grp.add(topCap);
+  var underBeam = new THREE.Mesh(new THREE.BoxGeometry(7.6 * scale, 0.35 * scale, 0.5 * scale), darkMat);
+  underBeam.position.set(0, pillarH - 0.7 * scale, 0); grp.add(underBeam);
+  var plaque = new THREE.Mesh(new THREE.BoxGeometry(0.9 * scale, 1.1 * scale, 0.15 * scale), darkMat);
+  plaque.position.set(0, pillarH - 0.3 * scale, 0.5 * scale); grp.add(plaque);
+  grp.position.set(x, 0, z);
+  scene.add(grp);
+}
+
+function makeStoneLantern(x, z) {
+  var grp = new THREE.Group();
+  var stoneMat = new THREE.MeshLambertMaterial({ color: 0x707070 });
+  var base = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.45, 0.3, 8), stoneMat);
+  base.position.y = 0.15; grp.add(base);
+  var pole = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, 1.1, 8), stoneMat);
+  pole.position.y = 0.85; grp.add(pole);
+  var box = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.6), stoneMat);
+  box.position.y = 1.55; grp.add(box);
+  var light = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), new THREE.MeshBasicMaterial({ color: 0xffcf7a }));
+  light.position.y = 1.55; grp.add(light);
+  var roof = new THREE.Mesh(new THREE.ConeGeometry(0.55, 0.4, 4), stoneMat);
+  roof.rotation.y = Math.PI / 4;
+  roof.position.y = 2.05; grp.add(roof);
+  grp.position.set(x, 0, z);
+  scene.add(grp);
+  var lanternLight = new THREE.PointLight(0xffcf7a, 0.5, 8);
+  lanternLight.position.set(x, 1.55, z);
+  scene.add(lanternLight);
+}
+
+function makeCherryTree(x, z, scale) {
+  scale = scale || 1;
+  var trunkH = 2.2 * scale;
+  var trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.14 * scale, 0.22 * scale, trunkH, 8), new THREE.MeshLambertMaterial({ color: 0x4a3527 }));
+  trunk.position.set(x, trunkH / 2, z); trunk.castShadow = true; scene.add(trunk);
+  var blossomColors = [0xffb7c5, 0xff8fab, 0xffd3e0];
+  for (var i = 0; i < 5; i++) {
+    var r = (0.9 + Math.random() * 0.5) * scale;
+    var puff = new THREE.Mesh(new THREE.SphereGeometry(r, 8, 6), new THREE.MeshLambertMaterial({ color: blossomColors[i % blossomColors.length] }));
+    puff.position.set(
+      x + (Math.random() - 0.5) * 1.6 * scale,
+      trunkH + 0.6 * scale + (Math.random() - 0.5) * 0.8 * scale,
+      z + (Math.random() - 0.5) * 1.6 * scale
+    );
+    puff.castShadow = true; scene.add(puff);
+  }
+}
+
+function makePagoda(x, z) {
+  var grp = new THREE.Group();
+  var wallMat = new THREE.MeshLambertMaterial({ color: 0x9b2c1f });
+  var roofMat = new THREE.MeshLambertMaterial({ color: 0x2b2320 });
+  var tiers = 5;
+  var y = 0;
+  for (var i = 0; i < tiers; i++) {
+    var w = 6.4 - i * 0.9, h = 2.0, roofW = w + 1.6;
+    var body = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), wallMat);
+    body.position.set(0, y + h / 2, 0); body.castShadow = true; grp.add(body);
+    var roof = new THREE.Mesh(new THREE.ConeGeometry(roofW * 0.72, 1.1, 4), roofMat);
+    roof.rotation.y = Math.PI / 4;
+    roof.position.set(0, y + h + 0.4, 0); roof.castShadow = true; grp.add(roof);
+    y += h + 0.7;
+  }
+  var spire = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.12, 2.2, 8), new THREE.MeshLambertMaterial({ color: 0xc9a24b }));
+  spire.position.set(0, y + 1.1, 0); grp.add(spire);
+  grp.position.set(x, 0, z);
+  scene.add(grp);
+  treeMeshes.push({ x: x, z: z, r: 3.4 });
+}
+
+function makeMtFuji(x, z) {
+  var grp = new THREE.Group();
+  var mountain = new THREE.Mesh(new THREE.ConeGeometry(55, 60, 4), new THREE.MeshLambertMaterial({ color: 0x5c6a72 }));
+  mountain.rotation.y = Math.PI / 4;
+  mountain.position.set(0, 28, 0);
+  grp.add(mountain);
+  var cap = new THREE.Mesh(new THREE.ConeGeometry(20, 20, 4), new THREE.MeshLambertMaterial({ color: 0xf5f8fa }));
+  cap.rotation.y = Math.PI / 4;
+  cap.position.set(0, 50, 0);
+  grp.add(cap);
+  grp.position.set(x, 0, z);
+  scene.add(grp);
+}
+
+function buildJapanZone() {
+  var cz = -300;
+  makeMtFuji(0, cz - 130);
+  makePagoda(0, cz - 30);
+  // Approach gates, biggest first, shrinking as you go deeper — classic torii path
+  makeToriiGate(0, japanGateIn.z, 1.15);
+  makeToriiGate(0, cz - 35 + 15, 1.0);
+  makeToriiGate(0, japanGateOut.z, 0.9);
+  // Lanterns lining the path
+  for (var lz = japanGateIn.z; lz > japanGateOut.z; lz -= 12) {
+    makeStoneLantern(-5, lz);
+    makeStoneLantern(5, lz);
+  }
+  // Cherry blossoms scattered off the path
+  for (var i = 0; i < 26; i++) {
+    var tx = (Math.random() - 0.5) * 130;
+    var tz = cz - 90 + Math.random() * 160;
+    if (Math.abs(tx) < 8) continue; // keep the walking path clear
+    makeCherryTree(tx, tz, 0.9 + Math.random() * 0.5);
+  }
+}
+
+function visitJapan() {
+  var inJapan = playerPos.z < japanGateIn.z;
+  if (inJapan) {
+    playerPos.x = 0; playerPos.z = japanGateIn.z - 8;
+    showNotif('🏞️ Welcome back to the Park', '', 2000);
+  } else {
+    playerPos.x = 0; playerPos.z = japanGateOut.z + 8;
+    showNotif('🗾 Welcome to Japan', '', 2000);
+  }
+  japanTeleportCooldown = 2;
 }
 
 
@@ -1944,9 +2093,20 @@ function handleMove(dt) {
     var tdx = newX - t.x, tdz = newZ - t.z;
     if (tdx * tdx + tdz * tdz < t.r * t.r) { blocked = true; break; }
   }
-  if (!blocked && Math.abs(newX) < 148 && Math.abs(newZ) < 148) {
+  if (!blocked && newX > -158 && newX < 158 && newZ > -340 && newZ < 158) {
     playerPos.x = newX;
     playerPos.z = newZ;
+  }
+
+  if (japanTeleportCooldown > 0) japanTeleportCooldown -= dt;
+  else if (Math.abs(playerPos.x - japanGateIn.x) < 3 && Math.abs(playerPos.z - japanGateIn.z) < 2) {
+    playerPos.z = japanGateOut.z + 8;
+    japanTeleportCooldown = 2;
+    showNotif('🗾 Welcome to Japan', '', 2000);
+  } else if (Math.abs(playerPos.x - japanGateOut.x) < 3 && Math.abs(playerPos.z - japanGateOut.z) < 2) {
+    playerPos.z = japanGateIn.z - 8;
+    japanTeleportCooldown = 2;
+    showNotif('🏞️ Welcome back to the Park', '', 2000);
   }
 
   var bobY = Math.sin(t3 * (moving ? 8 : 2)) * (moving ? 0.05 : 0.02);

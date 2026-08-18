@@ -69,7 +69,7 @@ const costumeCatalog = [
   { id: 'astronaut', name: 'Astronaut', price: 200 },
 ];
 const releasedCostumes = new Set();
-let maintenance = { active: false, endsAt: null };
+let maintenance = { active: true, endsAt: 1787142600000 }; // auto-locked until 2026-08-19 15:30 Europe/Sofia (only 'zlati' can log in until then)
 setInterval(() => {
   if (maintenance.active && Date.now() >= maintenance.endsAt) {
     maintenance = { active: false, endsAt: null };

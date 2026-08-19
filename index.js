@@ -175,6 +175,7 @@ io.on('connection', (socket) => {
     socket.emit('dj_state', { spawned: djBoothSpawned });
     socket.emit('costumes_catalog', { catalog: costumeCatalog, released: Array.from(releasedCostumes) });
     socket.emit('my_costumes', { owned: user.costumes || [], equipped: user.equipped_costume || null });
+    socket.emit('my_quests', { completed: user.quests_completed || [] });
     socket.emit('maintenance_state', { active: maintenance.active, endsAt: maintenance.endsAt });
   });
 
@@ -460,6 +461,13 @@ io.on('connection', (socket) => {
     } else if (action === 'unban') {
       if (!user.admin) return socket.emit('admin_error', 'Only admins can unban');
       await saveUser(targetUsername, { banned: false });
+    } else if (action === 'hide_user' || action === 'unhide_user') {
+      if (!user.admin) return socket.emit('admin_error', 'Admin only');
+      const hide = action === 'hide_user';
+      const { error: hideErr } = await supabase.from('players').update({ hidden_from_admin: hide }).eq('username', targetUsername);
+      if (hideErr) return socket.emit('admin_error', 'DB error: ' + hideErr.message + ' — run: ALTER TABLE players ADD COLUMN IF NOT EXISTS hidden_from_admin BOOLEAN DEFAULT false;');
+      if (userCache[targetUsername]) userCache[targetUsername].hidden_from_admin = hide;
+      return socket.emit('admin_success', (hide ? 'Hid ' : 'Unhid ') + targetUsername);
     } else if (action === 'delete_account') {
       if (!user.admin) return socket.emit('admin_error', 'Only admins can delete accounts');
       const sid = getSocketIdByUsername(targetUsername);
@@ -533,14 +541,16 @@ io.on('connection', (socket) => {
     socket.emit('admin_success', action + ' applied to ' + targetUsername)
   });
 
-  socket.on('admin_list', async ({ token }) => {
+  socket.on('admin_list', async ({ token, showHidden }) => {
     const username = getUsername(token);
     const user = await loadUser(username);
     if (!user || (!user.admin && !user.mod)) return;
-    const { data, error } = await supabase.from('players').select('username, admin, mod, banned, muted, warnings');
+    const { data, error } = await supabase.from('players').select('username, admin, mod, banned, muted, warnings, hidden_from_admin');
     if (error || !data) return;
-    socket.emit('admin_list', data.map(d => ({
+    const filtered = showHidden ? data : data.filter(d => !d.hidden_from_admin);
+    socket.emit('admin_list', filtered.map(d => ({
       username: d.username, admin: d.admin, mod: !!d.mod, banned: d.banned, muted: !!d.muted, warnings: d.warnings || 0,
+      hidden: !!d.hidden_from_admin,
       online: Object.values(players).some(p => p.username === d.username)
     })));
   });
@@ -658,6 +668,24 @@ io.on('connection', (socket) => {
     const room = players[socket.id] ? players[socket.id].room : 'public';
     io.to(room).emit('collected', { orbId, username });
     socket.emit('coins', { coins });
+  });
+
+  socket.on('claim_quest', async ({ token, questId }) => {
+    const username = getUsername(token); if (!username || !players[socket.id]) return;
+    const user = await loadUser(username);
+    if (!user) return;
+    const completed = user.quests_completed || [];
+    if (completed.includes(questId)) return socket.emit('quest_error', 'Already claimed');
+    const rewards = { sakura_hunt: 50 };
+    const reward = rewards[questId];
+    if (!reward) return socket.emit('quest_error', 'Unknown quest');
+    const coins = (user.coins || 0) + reward;
+    const newCompleted = completed.concat([questId]);
+    const { error } = await supabase.from('players').update({ coins, quests_completed: newCompleted }).eq('username', username);
+    if (error) return socket.emit('quest_error', 'DB error: ' + error.message + ' — run: ALTER TABLE players ADD COLUMN IF NOT EXISTS quests_completed JSONB DEFAULT \'[]\'::jsonb;');
+    if (userCache[username]) { userCache[username].coins = coins; userCache[username].quests_completed = newCompleted; }
+    socket.emit('coins', { coins });
+    socket.emit('quest_claimed', { questId, reward });
   });
 
   socket.on('leaderboard', async () => {

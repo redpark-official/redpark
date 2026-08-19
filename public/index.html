@@ -372,10 +372,19 @@ body.compact-ui .emote-btn{width:34px;height:34px;font-size:15px;border-radius:9
     </div>
     <div id="maintenance-admin-status" style="color:#facc15;font-size:12px;margin-top:8px"></div>
   </div>
+  <div style="margin-top:14px;display:flex;align-items:center;gap:8px">
+    <input type="checkbox" id="admin-show-hidden" onchange="refreshAdminList()" style="width:16px;height:16px">
+    <label for="admin-show-hidden" style="font-size:12px;color:#94a3b8">Show hidden users</label>
+  </div>
   <div id="admin-list"></div>
 </div>
 
 <div id="notif"></div>
+<div id="dialogue-box" style="display:none;position:fixed;bottom:100px;left:50%;transform:translateX(-50%);width:min(420px,86vw);background:rgba(15,15,25,.92);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:16px 18px;z-index:50;color:#fff">
+  <div id="dialogue-name" style="font-size:13px;font-weight:800;color:#facc15;margin-bottom:6px">Old Monk</div>
+  <div id="dialogue-text" style="font-size:13px;line-height:1.5;color:#e2e8f0;margin-bottom:10px"></div>
+  <button id="dialogue-claim-btn" style="display:none;width:100%;padding:9px;border-radius:10px;border:none;background:#4ade80;color:#0a0a12;font-weight:800;cursor:pointer;font-size:13px" onclick="claimSakuraQuest()">Claim 50 coins</button>
+</div>
 <div id="maintenance-overlay" style="display:none;position:fixed;inset:0;background:#000;z-index:99999;color:#fff;flex-direction:column;align-items:center;justify-content:center;font-family:inherit;text-align:center;padding:20px">
   <div style="font-size:15px;letter-spacing:2px;text-transform:uppercase;color:#64748b;margin-bottom:16px">Red Park is updating</div>
   <div id="maintenance-countdown" style="font-size:56px;font-weight:800;font-variant-numeric:tabular-nums">--:--</div>
@@ -718,7 +727,19 @@ function initSocket() {
     renderCostumeShop();
     rebuildLocalCharacter();
   });
+  socket.on('my_quests', function(d) {
+    if ((d.completed || []).indexOf('sakura_hunt') !== -1) {
+      sakuraQuestClaimed = true;
+      sakuraCollected = sakuraPetalPositions.length;
+      sakuraPetals.forEach(function(p) { p.visible = false; });
+    }
+  });
   socket.on('costume_error', function(m) { showNotif('Costumes', m, 3000); });
+  socket.on('quest_claimed', function(d) {
+    if (d.questId === 'sakura_hunt') sakuraQuestClaimed = true;
+    showNotif('🌸 Quest complete!', '+' + d.reward + ' coins', 3000);
+  });
+  socket.on('quest_error', function(m) { showNotif('Quest', m, 2500); });
   socket.on('costume_bought', function(d) { showNotif('Costumes', 'Unlocked! Equip it from the Customize panel', 3000); });
   socket.on('player_costume', function(d) {
     var rp = remotePlayers[d.id];
@@ -764,7 +785,7 @@ function initSocket() {
   socket.on('friend_accepted', function(d) { showNotif('Now friends with ' + d.by, '', 2500); });
   socket.on('friend_sent', function(u) { showNotif('Request sent to ' + u, '', 2000); });
   socket.on('friend_error', function(m) { showNotif(m, '', 2000); });
-  socket.on('admin_success', function(m) { var e = document.getElementById('admin-msg'); e.style.color = '#4ade80'; e.textContent = m; socket.emit('admin_list', { token: token }); });
+  socket.on('admin_success', function(m) { var e = document.getElementById('admin-msg'); e.style.color = '#4ade80'; e.textContent = m; refreshAdminList(); });
   socket.on('broadcast', function(d) { showNotif('📢 ' + (d.by||'System'), d.message, 6000); addChatMsg({ username: '[SYSTEM]', color: '#f87171', admin: false, mod: false, message: d.message }); });
   socket.on('admin_freeze', function(d) { if(d.target===myUsername){ moveSpeed=0; showNotif('Frozen by admin','',4000); } });
   socket.on('admin_unfreeze', function(d) { if(d.target===myUsername){ moveSpeed=5; showNotif('Unfrozen','',2000); } });
@@ -895,7 +916,6 @@ function initThree() {
   scene.add(sky2);
 
   gltfLoader = (typeof THREE !== 'undefined' && THREE.GLTFLoader) ? new THREE.GLTFLoader() : null;
-  initParkCharacters();
   initLocalPlayerModel();
   initModelSystem(function() { buildPark(); });
   spawnCollectibles();
@@ -913,6 +933,9 @@ function initThree() {
     updateLabels();
     drawMinimap();
     checkCollectibles();
+    checkSakuraPetals();
+    checkTempleBellRing();
+    updateMonkDialogue();
     updateDayNight(dt);
     updateWeather(dt);
     updateDjBooth(t3);
@@ -1034,17 +1057,6 @@ function makeBlockyChar(color, adminColor, costumeId) {
     box(0.4,0.5,0.22,mat(0xcfd8dc), 0,1.1,-0.28);
   }
   return grp;
-}
-
-function initParkCharacters() {
-  var npcColors = ['#f87171','#60a5fa','#4ade80','#facc15','#a78bfa'];
-  var spots = [[9,0,4,Math.PI],[-9,0,4,0],[7,0,-9,Math.PI*0.5],[-7,0,-9,-Math.PI*0.5],[15,0,15,Math.PI*1.25]];
-  spots.forEach(function(sp, i) {
-    var npc = makeBlockyChar(npcColors[i]);
-    npc.position.set(sp[0], 0, sp[2]);
-    npc.rotation.y = sp[3];
-    scene.add(npc);
-  });
 }
 
 function buildJumbotronFrame() {
@@ -1725,6 +1737,13 @@ function buildJapanZone() {
         makeCherryTree(tx, tz, 0.9 + Math.random() * 0.5);
       }
     }],
+    ['Monk NPC', function() { monkPos = makeMonkNpc(4, -325); }],
+    ['Sakura petals', function() { makeSakuraPetals(); }],
+    ['Koi pond', function() { makeKoiPond(-35, -260); }],
+    ['Bamboo grove', function() { makeBambooGrove(35, -250); }],
+    ['Teahouse', function() { makeTeahouse(-35, -220); }],
+    ['Zen garden', function() { makeZenGarden(35, -215); }],
+    ['Temple bell', function() { makeTempleBell(-4, -300); }],
   ];
   var builtCount = 0;
   steps.forEach(function(step) {
@@ -1732,6 +1751,206 @@ function buildJapanZone() {
     catch (e) { console.error('[Japan Zone] FAILED at "' + step[0] + '":', e); }
   });
   console.log('[Japan Zone] finished —', builtCount + '/' + steps.length, 'pieces built. Scene children total:', scene.children.length);
+}
+
+function makeKoiPond(x, z) {
+  var water = new THREE.Mesh(new THREE.CircleGeometry(8, 24), new THREE.MeshLambertMaterial({ color: 0x2f6690, transparent: true, opacity: 0.85 }));
+  water.rotation.x = -Math.PI / 2;
+  water.position.set(x, 0.02, z);
+  scene.add(water);
+  var koiColors = [0xff8f5e, 0xffffff, 0xff5e5e];
+  for (var i = 0; i < 4; i++) {
+    var koi = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.9, 6), new THREE.MeshLambertMaterial({ color: koiColors[i % koiColors.length] }));
+    koi.rotation.x = Math.PI / 2;
+    var ang = (i / 4) * Math.PI * 2;
+    koi.position.set(x + Math.cos(ang) * 3.5, 0.1, z + Math.sin(ang) * 3.5);
+    koi.rotation.z = ang;
+    scene.add(koi);
+  }
+  // Small arched red bridge across the pond
+  var bridgeMat = new THREE.MeshLambertMaterial({ color: 0xb3382c });
+  var deck = new THREE.Mesh(new THREE.BoxGeometry(2, 0.25, 9), bridgeMat);
+  deck.position.set(x, 0.9, z); deck.castShadow = true; scene.add(deck);
+  [-0.9, 0.9].forEach(function(rx) {
+    var rail = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.7, 9), bridgeMat);
+    rail.position.set(x + rx, 1.35, z); scene.add(rail);
+  });
+  [-4, 0, 4].forEach(function(pz) {
+    var post1 = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.9, 8), bridgeMat);
+    post1.position.set(x, 0.45, z + pz); scene.add(post1);
+  });
+  treeMeshes.push({ x: x, z: z, r: 8 }); // walk around the pond, not through it (bridge crosses over it visually)
+}
+
+function makeBambooGrove(x, z) {
+  for (var i = 0; i < 16; i++) {
+    var bx = x + (Math.random() - 0.5) * 8, bz = z + (Math.random() - 0.5) * 8;
+    var h = 3.5 + Math.random() * 2;
+    var stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, h, 6), new THREE.MeshLambertMaterial({ color: 0x7cb342 }));
+    stalk.position.set(bx, h / 2, bz); stalk.castShadow = true; scene.add(stalk);
+    var leafCluster = new THREE.Mesh(new THREE.SphereGeometry(0.6, 6, 5), new THREE.MeshLambertMaterial({ color: 0x8bc34a }));
+    leafCluster.position.set(bx, h, bz); leafCluster.scale.set(1, 0.5, 1); scene.add(leafCluster);
+  }
+}
+
+function makeTeahouse(x, z) {
+  var grp = new THREE.Group();
+  var pillarMat = new THREE.MeshLambertMaterial({ color: 0x5d4037 });
+  var roofMat = new THREE.MeshLambertMaterial({ color: 0x37474f });
+  var corners = [[-3.5, -3.5], [3.5, -3.5], [3.5, 3.5], [-3.5, 3.5]];
+  corners.forEach(function(c) {
+    var pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 2.6, 8), pillarMat);
+    pillar.position.set(c[0], 1.3, c[1]); pillar.castShadow = true; grp.add(pillar);
+  });
+  var roof = new THREE.Mesh(new THREE.ConeGeometry(6, 1.6, 4), roofMat);
+  roof.rotation.y = Math.PI / 4;
+  roof.position.set(0, 3.4, 0); roof.castShadow = true; grp.add(roof);
+  var floor = new THREE.Mesh(new THREE.BoxGeometry(7, 0.15, 7), new THREE.MeshLambertMaterial({ color: 0xc9a876 }));
+  floor.position.set(0, 0.08, 0); grp.add(floor);
+  var table = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.35, 8), new THREE.MeshLambertMaterial({ color: 0x3e2723 }));
+  table.position.set(0, 0.5, 0); grp.add(table);
+  for (var i = 0; i < 4; i++) {
+    var ang = (i / 4) * Math.PI * 2;
+    var cushion = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.25, 10), new THREE.MeshLambertMaterial({ color: 0xb3382c }));
+    cushion.position.set(Math.cos(ang) * 1.8, 0.25, Math.sin(ang) * 1.8);
+    grp.add(cushion);
+  }
+  grp.position.set(x, 0, z);
+  scene.add(grp);
+}
+
+function makeZenGarden(x, z) {
+  var sand = new THREE.Mesh(new THREE.CircleGeometry(7, 32), new THREE.MeshLambertMaterial({ color: 0xe4d9b8 }));
+  sand.rotation.x = -Math.PI / 2;
+  sand.position.set(x, 0.03, z);
+  scene.add(sand);
+  // Raked rings around the rocks
+  for (var r = 1.5; r < 6.5; r += 1) {
+    var ring = new THREE.Mesh(new THREE.RingGeometry(r, r + 0.08, 40), new THREE.MeshBasicMaterial({ color: 0xcabb90, side: THREE.DoubleSide }));
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(x, 0.04, z);
+    scene.add(ring);
+  }
+  var rockPositions = [[0, 0, 0.9], [1.8, -1.2, 0.6], [-2, 1.5, 0.5]];
+  rockPositions.forEach(function(rp) {
+    var rock = new THREE.Mesh(new THREE.DodecahedronGeometry(rp[2], 0), new THREE.MeshLambertMaterial({ color: 0x6b6b6b }));
+    rock.position.set(x + rp[0], rp[2] * 0.6, z + rp[1]);
+    rock.rotation.set(Math.random(), Math.random(), Math.random());
+    rock.castShadow = true;
+    scene.add(rock);
+  });
+  var border = new THREE.Mesh(new THREE.TorusGeometry(7.15, 0.15, 8, 32), new THREE.MeshLambertMaterial({ color: 0x4a3527 }));
+  border.rotation.x = -Math.PI / 2;
+  border.position.set(x, 0.03, z);
+  scene.add(border);
+  treeMeshes.push({ x: x, z: z, r: 7.3 });
+}
+
+var templeBell = null, templeBellSwing = 0;
+function makeTempleBell(x, z) {
+  var grp = new THREE.Group();
+  var woodMat = new THREE.MeshLambertMaterial({ color: 0x5d4037 });
+  var bellMat = new THREE.MeshLambertMaterial({ color: 0x8d6e4a });
+  [-1.6, 1.6].forEach(function(px) {
+    var post = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 3.2, 8), woodMat);
+    post.position.set(px, 1.6, 0); post.castShadow = true; grp.add(post);
+  });
+  var beam = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.25, 0.25), woodMat);
+  beam.position.set(0, 3.2, 0); grp.add(beam);
+  var bell = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.75, 1.3, 16), bellMat);
+  bell.position.set(0, 2.2, 0); bell.castShadow = true; grp.add(bell);
+  grp.userData.bell = bell;
+  grp.position.set(x, 0, z);
+  scene.add(grp);
+  templeBell = grp;
+  return { x: x, z: z };
+}
+function checkTempleBellRing() {
+  if (!templeBell) return;
+  var dx = playerPos.x - templeBell.position.x, dz = playerPos.z - templeBell.position.z;
+  if (dx * dx + dz * dz < 9 && (keys['e'] || keys['E']) && templeBellSwing <= 0) {
+    templeBellSwing = 1;
+    showNotif('🔔 The bell rings across the valley', '', 2500);
+  }
+  if (templeBellSwing > 0) {
+    templeBellSwing -= 0.05;
+    templeBell.userData.bell.rotation.z = Math.sin(templeBellSwing * 20) * templeBellSwing * 0.3;
+  }
+}
+
+function makeMonkNpc(x, z) {
+  var grp = new THREE.Group();
+  var robeMat = new THREE.MeshLambertMaterial({ color: 0xb3382c });
+  var skinMat = new THREE.MeshLambertMaterial({ color: 0xf5cba7 });
+  var body = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.5, 10), robeMat);
+  body.position.y = 0.85; body.castShadow = true; grp.add(body);
+  var head = new THREE.Mesh(new THREE.SphereGeometry(0.32, 10, 10), skinMat);
+  head.position.y = 1.75; head.castShadow = true; grp.add(head);
+  var hat = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.3, 10), new THREE.MeshLambertMaterial({ color: 0xf5d76e }));
+  hat.position.y = 2.05; grp.add(hat);
+  grp.position.set(x, 0, z);
+  scene.add(grp);
+  treeMeshes.push({ x: x, z: z, r: 1 });
+  return { x: x, z: z };
+}
+
+var sakuraPetals = [];
+var sakuraPetalPositions = [[-20, -220], [18, -245], [-15, -270], [20, -290], [0, -310]];
+function makeSakuraPetals() {
+  sakuraPetals = [];
+  sakuraPetalPositions.forEach(function(p) {
+    var petal = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.28, 0),
+      new THREE.MeshBasicMaterial({ color: 0xff8fab })
+    );
+    petal.position.set(p[0], 1.1, p[1]);
+    petal.visible = !sakuraQuestClaimed;
+    scene.add(petal);
+    sakuraPetals.push(petal);
+  });
+}
+
+var monkPos = null;
+var sakuraCollected = 0, sakuraQuestClaimed = false;
+var dialogueOpen = false;
+
+function checkSakuraPetals() {
+  var px = playerPos.x, pz = playerPos.z;
+  sakuraPetals.forEach(function(petal) {
+    if (!petal.visible) return;
+    var dx = petal.position.x - px, dz = petal.position.z - pz;
+    if (dx * dx + dz * dz < 3) {
+      petal.visible = false;
+      sakuraCollected++;
+      showNotif('🌸 Sakura petal collected', sakuraCollected + '/' + sakuraPetalPositions.length, 1800);
+    }
+  });
+}
+
+function updateMonkDialogue() {
+  if (!monkPos) return;
+  var dx = playerPos.x - monkPos.x, dz = playerPos.z - monkPos.z;
+  var near = (dx * dx + dz * dz) < 16;
+  var box = document.getElementById('dialogue-box');
+  var textEl = document.getElementById('dialogue-text');
+  var claimBtn = document.getElementById('dialogue-claim-btn');
+  if (!near) { box.style.display = 'none'; dialogueOpen = false; return; }
+  dialogueOpen = true;
+  box.style.display = 'block';
+  if (sakuraQuestClaimed) {
+    textEl.textContent = 'Thank you for helping tend the garden, traveler. May the blossoms bring you peace.';
+    claimBtn.style.display = 'none';
+  } else if (sakuraCollected >= sakuraPetalPositions.length) {
+    textEl.textContent = 'You found all the fallen sakura petals! Please, take this as thanks.';
+    claimBtn.style.display = 'block';
+  } else {
+    textEl.textContent = 'Welcome, traveler. The wind has scattered ' + sakuraPetalPositions.length + ' sakura petals around these grounds — bring them all to me for a reward. Found so far: ' + sakuraCollected + '/' + sakuraPetalPositions.length + '.';
+    claimBtn.style.display = 'none';
+  }
+}
+
+function claimSakuraQuest() {
+  socket.emit('claim_quest', { token: token, questId: 'sakura_hunt' });
 }
 
 function visitJapan() {
@@ -2020,19 +2239,23 @@ function setupMobileControls() {
   var joy = document.getElementById('joy-outer');
   joy.style.display = 'block';
   var inner = document.getElementById('joy-inner');
-  var cx, cy;
+  var cx, cy, joyTouchId = null;
   joy.addEventListener('touchstart', function(e) {
     e.preventDefault();
+    if (joyTouchId !== null) return; // already tracking a finger, ignore extra touches on the joystick
+    var t = e.changedTouches[0];
+    joyTouchId = t.identifier;
     joyActive = true;
-    var t = e.touches[0];
     var rect = joy.getBoundingClientRect();
     cx = rect.left + rect.width / 2;
     cy = rect.top + rect.height / 2;
   });
   joy.addEventListener('touchmove', function(e) {
     e.preventDefault();
-    if (!joyActive) return;
-    var t = e.touches[0];
+    if (!joyActive || joyTouchId === null) return;
+    var t = null;
+    for (var i = 0; i < e.touches.length; i++) { if (e.touches[i].identifier === joyTouchId) { t = e.touches[i]; break; } }
+    if (!t) return;
     var dx = t.clientX - cx, dy = t.clientY - cy;
     var dist = Math.min(Math.sqrt(dx * dx + dy * dy), 50);
     var ang = Math.atan2(dy, dx);
@@ -2042,7 +2265,11 @@ function setupMobileControls() {
     inner.style.top = (38 + joyVec.y * 30) + 'px';
   });
   joy.addEventListener('touchend', function(e) {
+    var stillDown = false;
+    for (var i = 0; i < e.touches.length; i++) { if (e.touches[i].identifier === joyTouchId) { stillDown = true; break; } }
+    if (stillDown) return;
     joyActive = false;
+    joyTouchId = null;
     joyVec.x = 0; joyVec.y = 0;
     inner.style.left = '38px'; inner.style.top = '38px';
   });
@@ -2069,9 +2296,10 @@ function setupMobileControls() {
     }
   });
   document.addEventListener('touchend', function(e) {
-    for (var i = 0; i < e.touches.length; i++) {
-      if (e.touches[i].identifier === lookTouch.id) { lookTouch = null; break; }
-    }
+    if (!lookTouch) return;
+    var stillDown = false;
+    for (var i = 0; i < e.touches.length; i++) { if (e.touches[i].identifier === lookTouch.id) { stillDown = true; break; } }
+    if (!stillDown) lookTouch = null;
   });
 }
 
@@ -2235,7 +2463,7 @@ function openPanel(id) {
   document.getElementById(id).classList.add('open');
   if (id === 'friends-panel') renderFriends();
   if (id === 'leaderboard-panel') socket.emit('leaderboard');
-  if (id === 'admin-panel') socket.emit('admin_list', { token: token });
+  if (id === 'admin-panel') refreshAdminList();
   if (id === 'profile-panel') {
     document.getElementById('stat-friends').textContent = (friendData.friends || []).length;
   }
@@ -2522,6 +2750,13 @@ function adminDeleteAccount(username) {
   if (!confirm('Delete ' + username + "'s account permanently? This does NOT block their IP — they can just make a new account. This cannot be undone.")) return;
   socket.emit('admin_action', { token: token, action: 'delete_account', targetUsername: username });
 }
+function refreshAdminList() {
+  var cb = document.getElementById('admin-show-hidden');
+  socket.emit('admin_list', { token: token, showHidden: !!(cb && cb.checked) });
+}
+function adminToggleHidden(username, hide) {
+  socket.emit('admin_action', { token: token, action: hide ? 'hide_user' : 'unhide_user', targetUsername: username });
+}
 
 // ==================== ADMIN ====================
 function renderAdminList(list) {
@@ -2557,6 +2792,7 @@ function renderAdminList(list) {
       actions += '<button class="admin-btn" onclick="adminAct(\'unban\',\'' + u.username + '\')">Unban</button>';
       actions += '<button class="admin-btn danger" onclick="adminIpBan(\'' + u.username + '\')">🚫 IP Ban + Delete</button>';
       actions += '<button class="admin-btn danger" onclick="adminDeleteAccount(\'' + u.username + '\')">🗑️ Delete Account</button>';
+      actions += '<button class="admin-btn" onclick="adminToggleHidden(\'' + u.username + '\', ' + (u.hidden ? 'false' : 'true') + ')">' + (u.hidden ? '👁️ Unhide' : '🙈 Hide') + '</button>';
     }
     row.innerHTML = '<div class="admin-name">' + u.username + '</div><div class="admin-badges">' + badges + '</div><div class="admin-actions">' + actions + '</div>';
     el.appendChild(row);

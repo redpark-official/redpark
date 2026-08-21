@@ -177,6 +177,10 @@ body.compact-ui .emote-btn{width:34px;height:34px;font-size:15px;border-radius:9
     <div class="emote-btn" onclick="sendEmote('jump')">⭐</div>
   </div>
   <div id="joy-outer"><div id="joy-inner"></div></div>
+  <div id="fly-controls" style="display:none;position:fixed;bottom:100px;right:20px;flex-direction:column;gap:10px;z-index:15">
+    <button ontouchstart="flyKeyUp=true" ontouchend="flyKeyUp=false" onmousedown="flyKeyUp=true" onmouseup="flyKeyUp=false" style="width:56px;height:56px;border-radius:50%;border:none;background:rgba(74,222,128,.85);color:#0a0a12;font-size:22px;font-weight:800">⬆️</button>
+    <button ontouchstart="flyKeyDown=true" ontouchend="flyKeyDown=false" onmousedown="flyKeyDown=true" onmouseup="flyKeyDown=false" style="width:56px;height:56px;border-radius:50%;border:none;background:rgba(248,113,113,.85);color:#0a0a12;font-size:22px;font-weight:800">⬇️</button>
+  </div>
   <div id="wrist-menu">
     <div id="wrist-toggle" onclick="toggleWrist()">☰</div>
     <div id="wrist-panel">
@@ -200,6 +204,9 @@ body.compact-ui .emote-btn{width:34px;height:34px;font-size:15px;border-radius:9
       </div>
       <div class="wrist-item" onclick="visitJapan();closeWrist()">
         <span>🗾</span><span>Visit Japan</span>
+      </div>
+      <div class="wrist-item admin-only" id="fly-wrist-item" style="display:none" onclick="toggleFlyMode();closeWrist()">
+        <span>🕊️</span><span id="fly-wrist-label">Fly Mode: Off</span>
       </div>
       <div class="wrist-item" onclick="openPanel('music-panel');closeWrist()">
         <span>🎵</span><span>Music</span>
@@ -426,6 +433,9 @@ var djBoothSpawned = false, djBoothMesh = null, djLastDance = 0;
 var djBoothPos = { x: -30, z: -28 };
 var costumeCatalog = [], releasedCostumeIds = [], myCostumesOwned = [], myEquippedCostume = null;
 var maintenanceEndsAt = null, maintenanceInterval = null;
+var isVip = false;
+var flyMode = false, flyY = 0;
+var flyKeyUp = false, flyKeyDown = false;
 var jumbotronSpawned = false;
 var jumbotronPos = { x: 0, y: 5.2, z: -28 }, jumbotronRotY = Math.PI; // faces spawn (spawn is around z:8, looking toward -z)
 var keys = {};
@@ -734,6 +744,15 @@ function initSocket() {
       sakuraPetals.forEach(function(p) { p.visible = false; });
     }
   });
+  socket.on('vip_status', function(d) {
+    isVip = !!d.vip;
+    var el = document.getElementById('profile-name');
+    if (el) el.textContent = (isVip ? '🌟 ' : '') + myDisplayName;
+  });
+  socket.on('player_vip', function(d) {
+    var rp = remotePlayers[d.id];
+    if (rp) { rp.vip = d.vip; setRemoteLabelText(d.id, (d.vip ? '🌟 ' : '') + rp.displayName); }
+  });
   socket.on('costume_error', function(m) { showNotif('Costumes', m, 3000); });
   socket.on('quest_claimed', function(d) {
     if (d.questId === 'sakura_hunt') sakuraQuestClaimed = true;
@@ -760,7 +779,7 @@ function initSocket() {
   socket.on('player_display_name', function(d) { setRemoteLabelText(d.id, d.displayName); });
   socket.on('name_saved', function(d) {
     myDisplayName = d.displayName;
-    document.getElementById('profile-name').textContent = myDisplayName;
+    document.getElementById('profile-name').textContent = (isVip ? '🌟 ' : '') + myDisplayName;
     var wu = document.getElementById('wrist-uname'); if (wu) wu.textContent = myDisplayName;
     showNotif('Name updated', 'Now showing as "' + myDisplayName + '"', 2500);
   });
@@ -2073,11 +2092,12 @@ function addRemote(id, data) {
   group.rotation.y = data.rotY || 0;
   group.userData.anim = 'idle'; group.userData.baseY = 0; group.userData.animT = 0;
   scene.add(group);
-  var lbl = makeLabel(data.displayName || data.username, data.color || '#4ade80');
+  var labelText = (data.vip ? '🌟 ' : '') + (data.displayName || data.username);
+  var lbl = makeLabel(labelText, data.color || '#4ade80');
   lbl.position.copy(group.position);
   lbl.position.y += 2.2;
   scene.add(lbl);
-  remotePlayers[id] = { username: data.username, displayName: data.displayName || data.username, color: data.color, costume: data.costume || null, mesh: group, lbl: lbl };
+  remotePlayers[id] = { username: data.username, displayName: data.displayName || data.username, color: data.color, costume: data.costume || null, vip: !!data.vip, mesh: group, lbl: lbl };
 }
 
 function rebuildRemoteCharacter(id) {
@@ -2209,6 +2229,7 @@ function setupInput() {
   document.addEventListener('keydown', function(e) {
     keys[e.key.toLowerCase()] = true;
     if (e.key === 'Shift') isSprinting = true;
+    if (e.key === ' ' && document.activeElement !== document.getElementById('chat-input')) e.preventDefault();
     if (e.key === '/' || e.key === 'Enter') {
       var ci = document.getElementById('chat-input');
       if (document.activeElement !== ci) { e.preventDefault(); ci.focus(); }
@@ -2324,12 +2345,21 @@ function handleMove(dt) {
   var newX = playerPos.x + dx;
   var newZ = playerPos.z + dz;
 
-  // Collision with trees
+  if (flyMode) {
+    if (keys[' '] || flyKeyUp) flyY = Math.min(60, flyY + 14 * dt);
+    if (keys['c'] || flyKeyDown) flyY = Math.max(0, flyY - 14 * dt);
+  } else {
+    flyY = 0;
+  }
+
+  // Collision with trees — skipped while airborne so you can fly over obstacles
   var blocked = false;
-  for (var i = 0; i < treeMeshes.length; i++) {
-    var t = treeMeshes[i];
-    var tdx = newX - t.x, tdz = newZ - t.z;
-    if (tdx * tdx + tdz * tdz < t.r * t.r) { blocked = true; break; }
+  if (flyY <= 1) {
+    for (var i = 0; i < treeMeshes.length; i++) {
+      var t = treeMeshes[i];
+      var tdx = newX - t.x, tdz = newZ - t.z;
+      if (tdx * tdx + tdz * tdz < t.r * t.r) { blocked = true; break; }
+    }
   }
   if (!blocked && newX > -158 && newX < 158 && newZ > -340 && newZ < 158) {
     playerPos.x = newX;
@@ -2351,7 +2381,7 @@ function handleMove(dt) {
 
   // Position/animate the visible player character
   if (localPlayerRig) {
-    localPlayerRig.position.set(playerPos.x, bobY * (moving ? 1 : 0.3), playerPos.z);
+    localPlayerRig.position.set(playerPos.x, flyY + bobY * (moving ? 1 : 0.3), playerPos.z);
     localPlayerRig.rotation.y = yaw;
     // Arm swing for walking
     if (moving) {
@@ -2366,8 +2396,8 @@ function handleMove(dt) {
   var cosP = Math.cos(pitch), sinP = Math.sin(pitch);
   camera.position.x = playerPos.x - Math.sin(yaw) * camDistance * cosP;
   camera.position.z = playerPos.z - Math.cos(yaw) * camDistance * cosP;
-  camera.position.y = eyeHeight + 1.2 + camDistance * sinP + bobY;
-  camera.lookAt(playerPos.x, eyeHeight, playerPos.z);
+  camera.position.y = flyY + eyeHeight + 1.2 + camDistance * sinP + bobY;
+  camera.lookAt(playerPos.x, flyY + eyeHeight, playerPos.z);
 
   // Update HUD
   document.getElementById('hud-coords').textContent = Math.round(playerPos.x) + ', ' + Math.round(playerPos.z);
@@ -2375,7 +2405,7 @@ function handleMove(dt) {
   // Send position to server
   if (socket && token) {
     socket.emit('move', {
-      x: playerPos.x, y: 0, z: playerPos.z, rotY: yaw,
+      x: playerPos.x, y: flyY, z: playerPos.z, rotY: yaw,
       anim: moving ? (isSprinting ? 'run' : 'walk') : 'idle'
     });
   }
@@ -2429,6 +2459,7 @@ function addChatMsg(d) {
   var div = document.createElement('div');
   div.className = 'chat-msg';
   var badge = d.admin ? ' [Admin]' : (d.mod ? ' [Mod]' : '');
+  if (d.vip) badge += ' 🌟VIP';
   var shown = d.displayName || d.username;
   div.innerHTML = '<span class="uname" style="color:' + (d.color || '#fff') + '">' + shown + badge + '</span>: ' + d.message.replace(/</g, '&lt;');
   box.appendChild(div);
@@ -2624,6 +2655,8 @@ function updateAdminOnlyUI() {
     var el = document.getElementById(id);
     if (el) el.style.display = isAdmin ? 'inline-block' : 'none';
   });
+  var flyItem = document.getElementById('fly-wrist-item');
+  if (flyItem) flyItem.style.display = isAdmin ? 'flex' : 'none';
   var isOwner = myUsername === 'zlati';
   var playBtn = document.getElementById('yt-play-btn');
   var stopBtn = document.getElementById('yt-stop-btn');
@@ -2637,6 +2670,13 @@ function updateAdminOnlyUI() {
   if (maintSection) maintSection.style.display = isOwner ? 'block' : 'none';
 }
 function djToggle() { socket.emit('dj_toggle', { token: token }); }
+function toggleFlyMode() {
+  if (!isAdmin) return;
+  flyMode = !flyMode;
+  document.getElementById('fly-wrist-label').textContent = 'Fly Mode: ' + (flyMode ? 'On' : 'Off');
+  document.getElementById('fly-controls').style.display = flyMode ? 'flex' : 'none';
+  showNotif(flyMode ? '🕊️ Fly mode on' : 'Fly mode off', flyMode ? 'Hold Space / ⬆️ to rise, C / ⬇️ to descend' : '', 3000);
+}
 
 function showMaintenanceOverlay(endsAt) {
   maintenanceEndsAt = endsAt;
@@ -2757,6 +2797,9 @@ function refreshAdminList() {
 function adminToggleHidden(username, hide) {
   socket.emit('admin_action', { token: token, action: hide ? 'hide_user' : 'unhide_user', targetUsername: username });
 }
+function adminToggleVip(username, grant) {
+  socket.emit('admin_action', { token: token, action: grant ? 'grant_vip' : 'revoke_vip', targetUsername: username });
+}
 
 // ==================== ADMIN ====================
 function renderAdminList(list) {
@@ -2793,6 +2836,7 @@ function renderAdminList(list) {
       actions += '<button class="admin-btn danger" onclick="adminIpBan(\'' + u.username + '\')">🚫 IP Ban + Delete</button>';
       actions += '<button class="admin-btn danger" onclick="adminDeleteAccount(\'' + u.username + '\')">🗑️ Delete Account</button>';
       actions += '<button class="admin-btn" onclick="adminToggleHidden(\'' + u.username + '\', ' + (u.hidden ? 'false' : 'true') + ')">' + (u.hidden ? '👁️ Unhide' : '🙈 Hide') + '</button>';
+      actions += '<button class="admin-btn" onclick="adminToggleVip(\'' + u.username + '\', ' + (u.vip ? 'false' : 'true') + ')">' + (u.vip ? '🌟 Remove VIP' : '🌟 Make VIP') + '</button>';
     }
     row.innerHTML = '<div class="admin-name">' + u.username + '</div><div class="admin-badges">' + badges + '</div><div class="admin-actions">' + actions + '</div>';
     el.appendChild(row);

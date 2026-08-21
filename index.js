@@ -69,7 +69,7 @@ const costumeCatalog = [
   { id: 'astronaut', name: 'Astronaut', price: 200 },
 ];
 const releasedCostumes = new Set();
-let maintenance = { active: true, endsAt: 1787142600000 }; // auto-locked until 2026-08-19 15:30 Europe/Sofia (only 'zlati' can log in until then)
+let maintenance = { active: false, endsAt: null };
 setInterval(() => {
   if (maintenance.active && Date.now() >= maintenance.endsAt) {
     maintenance = { active: false, endsAt: null };
@@ -97,7 +97,9 @@ let tagState = { active: false, itUsername: null, participants: [], msLeft: 0, l
 
 io.on('connection', (socket) => {
   const clientIp = getClientIp(socket);
+  console.log('[connection]', socket.id, 'from IP', clientIp, 'origin:', socket.handshake.headers.origin || socket.handshake.headers.referer || 'unknown');
   if (bannedIps.has(clientIp)) {
+    console.log('[connection] REJECTED — IP is banned:', clientIp);
     socket.emit('kick', 'You are banned from this server.');
     socket.disconnect(true);
     return;
@@ -158,7 +160,7 @@ io.on('connection', (socket) => {
     }
     socket.data.username = username;
     const ip = getClientIp(socket);
-    players[socket.id] = { username, x: (Math.random()-0.5)*30, y: 0, z: (Math.random()-0.5)*30, rotY: 0, color: user.color, room: 'public', displayName: user.display_name || username, ip, costume: user.equipped_costume || null };
+    players[socket.id] = { username, x: (Math.random()-0.5)*30, y: 0, z: (Math.random()-0.5)*30, rotY: 0, color: user.color, room: 'public', displayName: user.display_name || username, ip, costume: user.equipped_costume || null, vip: !!user.vip };
     saveUser(username, { last_ip: ip }).catch(() => {}); // best-effort; ignored if the column doesn't exist yet
     socket.join('public');
     socket.emit('world_state', { players: Object.entries(players).filter(([id, p]) => id !== socket.id && p.room === 'public').map(([id, p]) => ({ id, ...p })) });
@@ -176,6 +178,7 @@ io.on('connection', (socket) => {
     socket.emit('costumes_catalog', { catalog: costumeCatalog, released: Array.from(releasedCostumes) });
     socket.emit('my_costumes', { owned: user.costumes || [], equipped: user.equipped_costume || null });
     socket.emit('my_quests', { completed: user.quests_completed || [] });
+    socket.emit('vip_status', { vip: !!user.vip });
     socket.emit('maintenance_state', { active: maintenance.active, endsAt: maintenance.endsAt });
   });
 
@@ -198,7 +201,7 @@ io.on('connection', (socket) => {
     if (chatLocked && !user.admin && !user.mod) return socket.emit('chat_blocked', 'Chat is currently locked by an admin.');
     const chatRoom = players[socket.id] ? players[socket.id].room : 'public';
     const dispName = players[socket.id] ? players[socket.id].displayName : username;
-    io.to(chatRoom).emit('chat_msg', { username, displayName: dispName, message, color: user.color, admin: user.admin, mod: !!user.mod, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+    io.to(chatRoom).emit('chat_msg', { username, displayName: dispName, message, color: user.color, admin: user.admin, mod: !!user.mod, vip: !!user.vip, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
   });
 
   socket.on('set_display_name', async ({ token, name }) => {
@@ -461,6 +464,20 @@ io.on('connection', (socket) => {
     } else if (action === 'unban') {
       if (!user.admin) return socket.emit('admin_error', 'Only admins can unban');
       await saveUser(targetUsername, { banned: false });
+    } else if (action === 'grant_vip' || action === 'revoke_vip') {
+      if (!user.admin) return socket.emit('admin_error', 'Admin only');
+      const vip = action === 'grant_vip';
+      const { error: vipErr } = await supabase.from('players').update({ vip }).eq('username', targetUsername);
+      if (vipErr) return socket.emit('admin_error', 'DB error: ' + vipErr.message + ' — run: ALTER TABLE players ADD COLUMN IF NOT EXISTS vip BOOLEAN DEFAULT false;');
+      if (userCache[targetUsername]) userCache[targetUsername].vip = vip;
+      const sid = getSocketIdByUsername(targetUsername);
+      if (sid && players[sid]) {
+        players[sid].vip = vip;
+        io.to(sid).emit('vip_status', { vip });
+        socket.to(players[sid].room).emit('player_vip', { id: sid, vip });
+        if (vip) io.to(sid).emit('admin_success', "🌟 You've been made VIP!");
+      }
+      return socket.emit('admin_success', (vip ? 'Granted VIP to ' : 'Removed VIP from ') + targetUsername);
     } else if (action === 'hide_user' || action === 'unhide_user') {
       if (!user.admin) return socket.emit('admin_error', 'Admin only');
       const hide = action === 'hide_user';
@@ -545,12 +562,12 @@ io.on('connection', (socket) => {
     const username = getUsername(token);
     const user = await loadUser(username);
     if (!user || (!user.admin && !user.mod)) return;
-    const { data, error } = await supabase.from('players').select('username, admin, mod, banned, muted, warnings, hidden_from_admin');
+    const { data, error } = await supabase.from('players').select('username, admin, mod, banned, muted, warnings, hidden_from_admin, vip');
     if (error || !data) return;
     const filtered = showHidden ? data : data.filter(d => !d.hidden_from_admin);
     socket.emit('admin_list', filtered.map(d => ({
       username: d.username, admin: d.admin, mod: !!d.mod, banned: d.banned, muted: !!d.muted, warnings: d.warnings || 0,
-      hidden: !!d.hidden_from_admin,
+      hidden: !!d.hidden_from_admin, vip: !!d.vip,
       online: Object.values(players).some(p => p.username === d.username)
     })));
   });

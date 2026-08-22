@@ -562,8 +562,16 @@ io.on('connection', (socket) => {
     const username = getUsername(token);
     const user = await loadUser(username);
     if (!user || (!user.admin && !user.mod)) return;
-    const { data, error } = await supabase.from('players').select('username, admin, mod, banned, muted, warnings, hidden_from_admin, vip');
-    if (error || !data) return;
+    let { data, error } = await supabase.from('players').select('username, admin, mod, banned, muted, warnings, hidden_from_admin, vip');
+    if (error) {
+      // New columns probably don't exist yet — fall back to the base columns so the list still works
+      console.error('admin_list full query failed, falling back:', error.message);
+      const fallback = await supabase.from('players').select('username, admin, mod, banned, muted, warnings');
+      data = fallback.data;
+      error = fallback.error;
+      if (!error) socket.emit('admin_error', 'Some columns are missing (hidden/VIP won\'t show) — run the SQL migration to fix this fully.');
+    }
+    if (error || !data) return socket.emit('admin_error', 'Could not load player list: ' + (error ? error.message : 'unknown error'));
     const filtered = showHidden ? data : data.filter(d => !d.hidden_from_admin);
     socket.emit('admin_list', filtered.map(d => ({
       username: d.username, admin: d.admin, mod: !!d.mod, banned: d.banned, muted: !!d.muted, warnings: d.warnings || 0,

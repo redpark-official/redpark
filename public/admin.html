@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Red Park — Admin Portal</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',system-ui,sans-serif}
+body{background:#0a0a12;color:#fff;min-height:100vh}
+.wrap{max-width:900px;margin:0 auto;padding:24px 16px 60px}
+h1{font-size:22px;font-weight:800;margin-bottom:4px}
+.sub{color:#64748b;font-size:13px;margin-bottom:24px}
+.card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:18px;margin-bottom:16px}
+.card h2{font-size:15px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+input,select{width:100%;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.1);background:rgba(0,0,0,.3);color:#fff;font-size:13px;outline:none;margin-bottom:8px}
+button{padding:9px 16px;border-radius:8px;border:none;font-size:12px;font-weight:700;cursor:pointer;background:rgba(255,255,255,.12);color:#fff}
+button.primary{background:#4ade80;color:#0a0a12}
+button.danger{background:#f87171;color:#0a0a12}
+button:hover{filter:brightness(1.15)}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
+#login-screen{max-width:360px;margin:80px auto;padding:24px;background:rgba(255,255,255,.04);border-radius:14px;border:1px solid rgba(255,255,255,.08)}
+#msg{font-size:12px;margin-top:8px;min-height:16px}
+.player-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px;background:rgba(255,255,255,.03);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+.player-name{font-weight:700;font-size:13px;min-width:120px}
+.badge{font-size:10px;padding:2px 6px;border-radius:6px;background:rgba(255,255,255,.1);margin-left:6px}
+.badge.on{background:rgba(74,222,128,.25);color:#4ade80}
+#app{display:none}
+label{font-size:11px;color:#94a3b8;display:block;margin-bottom:4px}
+</style>
+</head>
+<body>
+
+<div id="login-screen">
+  <h1>🛡️ Admin Portal</h1>
+  <div class="sub">Red Park — sign in with an admin or mod account</div>
+  <label>Username</label>
+  <input id="lu" autocomplete="username">
+  <label>Password</label>
+  <input id="lp" type="password" autocomplete="current-password">
+  <button class="primary" style="width:100%" onclick="doLogin()">Sign In</button>
+  <div id="login-err" style="color:#f87171;font-size:12px;margin-top:8px"></div>
+</div>
+
+<div id="app">
+  <div class="wrap">
+    <h1>🛡️ Red Park Admin Portal</h1>
+    <div class="sub">Connected as <b id="who"></b> — actions here apply live to the running game</div>
+
+    <div class="card">
+      <h2>📢 Broadcast & Global</h2>
+      <input id="broadcast-msg" placeholder="Message to broadcast to everyone">
+      <div class="row">
+        <button class="primary" onclick="doBroadcast()">Send Broadcast</button>
+        <button class="danger" onclick="act('kickall')">⚡ Kick All</button>
+        <button onclick="act('muteall')">🔇 Mute All</button>
+        <button onclick="act('unmuteall')">🔊 Unmute All</button>
+        <button onclick="act('nightmode')">🌙 Force Night</button>
+        <button onclick="act('daymode')">☀️ Force Day</button>
+        <button onclick="act('clear_chat')">🧹 Clear Chat</button>
+        <button onclick="act('lockchat')">🔒 Lock Chat</button>
+        <button onclick="act('unlockchat')">🔓 Unlock Chat</button>
+        <button onclick="act('weather_rain')">🌧️ Rain</button>
+        <button onclick="act('weather_snow')">❄️ Snow</button>
+        <button onclick="act('weather_clear')">Weather Off</button>
+        <button onclick="act('jumbotron_toggle')">📺 Jumbotron On/Off</button>
+        <button class="danger" onclick="act('reset_world')">♻️ Reset World</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>🎵 Music &amp; DJ (owner only)</h2>
+      <input id="yt-url" placeholder="YouTube link">
+      <div class="row">
+        <button class="primary" onclick="playYt()">▶ Play for Everyone</button>
+        <button class="danger" onclick="stopYt()">⏹ Stop</button>
+        <button onclick="djToggle()">🎧 DJ Booth On/Off</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>🌑 Update Screen</h2>
+      <input id="maint-minutes" type="number" min="1" placeholder="Minutes from now">
+      <div class="row">
+        <button class="primary" onclick="startMaintenance()">Start Update Screen</button>
+        <button class="danger" onclick="act('clear_maintenance')">Clear</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>🔗 Screen Link Button</h2>
+      <input id="link-label" placeholder="Button label">
+      <input id="link-url" placeholder="https://...">
+      <div class="row">
+        <button class="primary" onclick="setLinkButton()">Set for Everyone</button>
+        <button class="danger" onclick="act('remove_link_button')">Remove</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>👕 Costume Releases</h2>
+      <div id="costume-list"></div>
+    </div>
+
+    <div class="card">
+      <h2>👥 Players <span id="online-count" class="badge on" style="margin-left:4px"></span></h2>
+      <div class="row">
+        <input id="search" placeholder="Filter by username..." style="max-width:260px" oninput="renderPlayers()">
+        <label style="display:flex;align-items:center;gap:6px;margin:0"><input type="checkbox" id="show-hidden" style="width:16px" onchange="refreshList()"> Show hidden</label>
+        <label style="display:flex;align-items:center;gap:6px;margin:0"><input type="checkbox" id="auto-refresh" style="width:16px" onchange="toggleAutoRefresh()"> Auto-refresh (10s)</label>
+        <button onclick="refreshList()">🔄 Refresh</button>
+      </div>
+      <div id="player-list"></div>
+    </div>
+
+    <div id="msg"></div>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+var socket, token, myUsername, isAdmin = false;
+var playersData = [];
+var costumeCatalog = [], releasedCostumes = [];
+
+function connect() {
+  socket = io();
+  socket.on('auth_ok', function(d) {
+    token = d.token; myUsername = d.username; isAdmin = !!d.admin;
+    if (!d.admin && !d.mod) {
+      document.getElementById('login-err').textContent = 'This account has no admin or mod permissions.';
+      return;
+    }
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    document.getElementById('who').textContent = myUsername + (isAdmin ? ' (admin)' : ' (mod)');
+    document.querySelector('input#yt-url').closest('.card').style.display = (myUsername === 'zlati') ? 'block' : 'none';
+    socket.emit('get_costumes_catalog', { token: token });
+    refreshList();
+  });
+  socket.on('auth_error', function(m) { document.getElementById('login-err').textContent = m; });
+  socket.on('admin_success', function(m) { setMsg(m, '#4ade80'); refreshList(); });
+  socket.on('admin_error', function(m) { setMsg(m, '#f87171'); });
+  socket.on('youtube_error', function(m) { setMsg(m, '#f87171'); });
+  socket.on('admin_list', function(data) { playersData = data; renderPlayers(); });
+  socket.on('costumes_catalog', function(d) {
+    costumeCatalog = d.catalog || [];
+    releasedCostumes = d.released || [];
+    renderCostumes();
+  });
+}
+
+function setMsg(m, color) {
+  var el = document.getElementById('msg');
+  el.style.color = color;
+  el.textContent = m;
+}
+
+function doLogin() {
+  var u = document.getElementById('lu').value.trim();
+  var p = document.getElementById('lp').value;
+  if (!u || !p) return;
+  socket.emit('login', { username: u, password: p });
+}
+
+function act(action, extra) {
+  var payload = Object.assign({ token: token, action: action }, extra || {});
+  socket.emit('admin_action', payload);
+}
+
+function doBroadcast() {
+  var v = document.getElementById('broadcast-msg').value.trim();
+  if (!v) return setMsg('Enter a message first', '#f87171');
+  act('broadcast', { reason: v });
+}
+
+function playYt() {
+  var url = document.getElementById('yt-url').value.trim();
+  if (!url) return setMsg('Paste a YouTube link first', '#f87171');
+  socket.emit('play_youtube', { token: token, url: url });
+}
+function stopYt() { socket.emit('stop_youtube', { token: token }); }
+function djToggle() { socket.emit('dj_toggle', { token: token }); }
+
+function startMaintenance() {
+  var n = parseFloat(document.getElementById('maint-minutes').value);
+  if (!Number.isFinite(n) || n <= 0) return setMsg('Enter a valid number of minutes', '#f87171');
+  act('set_maintenance', { reason: String(n) });
+}
+
+function setLinkButton() {
+  var label = document.getElementById('link-label').value.trim();
+  var url = document.getElementById('link-url').value.trim();
+  if (!label || !/^https?:\/\//i.test(url)) return setMsg('Need a label and a valid http(s) URL', '#f87171');
+  act('set_link_button', { label: label, url: url });
+}
+
+function refreshList() {
+  var showHidden = document.getElementById('show-hidden').checked;
+  socket.emit('admin_list', { token: token, showHidden: showHidden });
+}
+var autoRefreshTimer = null;
+function toggleAutoRefresh() {
+  var on = document.getElementById('auto-refresh').checked;
+  if (autoRefreshTimer) { clearInterval(autoRefreshTimer); autoRefreshTimer = null; }
+  if (on) autoRefreshTimer = setInterval(refreshList, 10000);
+}
+
+function renderCostumes() {
+  var el = document.getElementById('costume-list');
+  el.innerHTML = '';
+  costumeCatalog.forEach(function(c) {
+    var released = releasedCostumes.indexOf(c.id) !== -1;
+    var row = document.createElement('div');
+    row.className = 'row';
+    row.style.alignItems = 'center';
+    row.innerHTML = '<span style="min-width:140px;font-size:13px">' + c.name + ' (' + c.price + ' coins)</span>';
+    var btn = document.createElement('button');
+    btn.className = released ? 'danger' : 'primary';
+    btn.textContent = released ? 'Unrelease' : 'Release';
+    btn.onclick = function() { act(released ? 'unrelease_costume' : 'release_costume', { label: c.id }); };
+    row.appendChild(btn);
+    el.appendChild(row);
+  });
+}
+
+function renderPlayers() {
+  var filter = document.getElementById('search').value.trim().toLowerCase();
+  var el = document.getElementById('player-list');
+  var onlineCount = playersData.filter(function(u) { return u.online; }).length;
+  document.getElementById('online-count').textContent = onlineCount + ' online';
+  el.innerHTML = '';
+  playersData
+    .filter(function(u) { return !filter || u.username.toLowerCase().indexOf(filter) !== -1; })
+    .forEach(function(u) {
+      var row = document.createElement('div');
+      row.className = 'player-row';
+      var badges = '';
+      if (u.online) badges += '<span class="badge on">online</span>';
+      if (u.admin) badges += '<span class="badge">admin</span>';
+      if (u.mod) badges += '<span class="badge">mod</span>';
+      if (u.vip) badges += '<span class="badge" style="background:rgba(250,204,21,.25);color:#facc15">VIP</span>';
+      if (u.banned) badges += '<span class="badge" style="background:rgba(248,113,113,.25);color:#f87171">banned</span>';
+      if (u.muted) badges += '<span class="badge">muted</span>';
+      if (u.hidden) badges += '<span class="badge">hidden</span>';
+      if (u.warnings) badges += '<span class="badge">' + u.warnings + ' warns</span>';
+      row.innerHTML = '<span class="player-name">' + u.username + badges + '</span>';
+      var actions = document.createElement('div');
+      actions.className = 'row';
+      actions.style.margin = '0';
+
+      function addBtn(label, cls, fn) {
+        var b = document.createElement('button');
+        b.textContent = label; if (cls) b.className = cls;
+        b.onclick = fn;
+        actions.appendChild(b);
+      }
+      addBtn('Kick', '', function() { act('kick', { targetUsername: u.username }); });
+      addBtn(u.muted ? 'Unmute' : 'Mute', '', function() { act(u.muted ? 'unmute' : 'mute', { targetUsername: u.username }); });
+      addBtn('Warn', '', function() {
+        var r = prompt('Warning reason:'); if (r === null) return;
+        act('warn', { targetUsername: u.username, reason: r });
+      });
+      addBtn(u.banned ? 'Unban' : 'Ban', u.banned ? '' : 'danger', function() { act(u.banned ? 'unban' : 'ban', { targetUsername: u.username }); });
+      addBtn('Set Coins', '', function() {
+        var n = prompt("Set " + u.username + "'s coins to:"); if (n === null) return;
+        act('set_coins', { targetUsername: u.username, reason: n });
+      });
+      addBtn('Give Coins', '', function() {
+        var n = prompt('Give how many coins (negative to remove):'); if (n === null) return;
+        act('give_coins', { targetUsername: u.username, reason: n });
+      });
+      addBtn('Rename', '', function() {
+        var n = prompt("Set " + u.username + "'s display name:"); if (n === null) return;
+        act('set_display_name', { targetUsername: u.username, reason: n });
+      });
+      addBtn(u.hidden ? 'Unhide' : 'Hide', '', function() { act(u.hidden ? 'unhide_user' : 'hide_user', { targetUsername: u.username }); });
+      addBtn(u.vip ? 'Remove VIP' : 'Make VIP', '', function() { act(u.vip ? 'revoke_vip' : 'grant_vip', { targetUsername: u.username }); });
+      addBtn('Freeze', '', function() { act('freeze', { targetUsername: u.username }); });
+      addBtn('Unfreeze', '', function() { act('unfreeze', { targetUsername: u.username }); });
+      addBtn(u.mod ? 'Remove Mod' : 'Make Mod', '', function() {
+        if (!confirm((u.mod ? 'Remove mod from ' : 'Make ' + u.username + ' a mod') + '?')) return;
+        act(u.mod ? 'removemod' : 'makemod', { targetUsername: u.username });
+      });
+      addBtn('Make Admin', 'danger', function() {
+        if (!confirm('Grant FULL ADMIN to ' + u.username + '? This gives them every power you have, permanently, including this portal. Cannot be undone from here.')) return;
+        act('makeadmin', { targetUsername: u.username });
+      });
+      addBtn('Delete Account', 'danger', function() {
+        if (!confirm('Permanently delete ' + u.username + '? This cannot be undone.')) return;
+        act('delete_account', { targetUsername: u.username });
+      });
+      addBtn('IP Ban + Delete', 'danger', function() {
+        if (!confirm('IP-ban and delete ' + u.username + '? This blocks their IP from reconnecting. Cannot be undone.')) return;
+        var r = prompt('Optional reason:') || '';
+        act('ip_ban', { targetUsername: u.username, reason: r });
+      });
+
+      row.appendChild(actions);
+      el.appendChild(row);
+    });
+}
+
+connect();
+</script>
+</body>
+</html>

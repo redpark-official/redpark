@@ -662,6 +662,11 @@ io.on('connection', (socket) => {
     socket.emit('my_costumes', { owned, equipped: costumeId || null });
   });
 
+  socket.on('get_costumes_catalog', ({ token }) => {
+    const username = getUsername(token); if (!username) return;
+    socket.emit('costumes_catalog', { catalog: costumeCatalog, released: Array.from(releasedCostumes) });
+  });
+
   socket.on('play_youtube', async ({ token, url }) => {
     const username = getUsername(token); if (!username) return;
     if (username !== 'zlati') return socket.emit('youtube_error', 'Only the park owner can start music for everyone');

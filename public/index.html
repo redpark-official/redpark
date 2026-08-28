@@ -185,6 +185,10 @@ body.compact-ui .emote-btn{width:34px;height:34px;font-size:15px;border-radius:9
       <div class="wheel-seg" style="position:absolute;top:50%;right:0;transform:translate(0,-50%)" onclick="sendEmote('dance');closeEmoteWheel()">💃</div>
       <div class="wheel-seg" style="position:absolute;bottom:0;left:50%;transform:translate(-50%,0)" onclick="sendEmote('sit');closeEmoteWheel()">🪑</div>
       <div class="wheel-seg" style="position:absolute;top:50%;left:0;transform:translate(0,-50%)" onclick="sendEmote('jump');closeEmoteWheel()">⭐</div>
+      <div class="wheel-seg" style="position:absolute;top:27px;left:137px" onclick="sendEmote('laugh');closeEmoteWheel()">😂</div>
+      <div class="wheel-seg" style="position:absolute;top:137px;left:137px" onclick="sendEmote('cry');closeEmoteWheel()">😢</div>
+      <div class="wheel-seg" style="position:absolute;top:137px;left:27px" onclick="sendEmote('point');closeEmoteWheel()">👉</div>
+      <div class="wheel-seg" style="position:absolute;top:27px;left:27px" onclick="sendEmote('clap');closeEmoteWheel()">👏</div>
       <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:11px;color:#94a3b8">B</div>
     </div>
   </div>
@@ -341,6 +345,10 @@ body.compact-ui .emote-btn{width:34px;height:34px;font-size:15px;border-radius:9
     <label style="margin:0">Small display mode</label>
     <input id="compact-ui-toggle" type="checkbox" style="width:20px;height:20px" onchange="compactUI=this.checked;applyCompactUI();saveSettings()">
   </div>
+  <div class="auth-field" style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+    <label style="margin:0">Sound effects</label>
+    <input id="sfx-toggle" type="checkbox" checked style="width:20px;height:20px" onchange="toggleSfx(this.checked)">
+  </div>
 </div>
 
 <div class="panel" id="admin-panel">
@@ -446,6 +454,7 @@ var djBoothPos = { x: -30, z: -28 };
 var costumeCatalog = [], releasedCostumeIds = [], myCostumesOwned = [], myEquippedCostume = null;
 var maintenanceEndsAt = null, maintenanceInterval = null;
 var isVip = false;
+var sfxEnabled = true, sfxCtx = null;
 var flyMode = false, flyY = 0;
 var flyKeyUp = false, flyKeyDown = false;
 var jumbotronSpawned = false;
@@ -768,6 +777,7 @@ function initSocket() {
   socket.on('costume_error', function(m) { showNotif('Costumes', m, 3000); });
   socket.on('quest_claimed', function(d) {
     if (d.questId === 'sakura_hunt') sakuraQuestClaimed = true;
+    sfxQuest();
     showNotif('🌸 Quest complete!', '+' + d.reward + ' coins', 3000);
   });
   socket.on('quest_error', function(m) { showNotif('Quest', m, 2500); });
@@ -1953,6 +1963,7 @@ function checkTempleBellRing() {
   var dx = playerPos.x - templeBell.position.x, dz = playerPos.z - templeBell.position.z;
   if (dx * dx + dz * dz < 9 && (keys['e'] || keys['E']) && templeBellSwing <= 0) {
     templeBellSwing = 1;
+    sfxBell();
     showNotif('🔔 The bell rings across the valley', '', 2500);
   }
   if (templeBellSwing > 0) {
@@ -2005,6 +2016,7 @@ function checkSakuraPetals() {
     if (dx * dx + dz * dz < 3) {
       petal.visible = false;
       sakuraCollected++;
+      sfxCoin();
       showNotif('🌸 Sakura petal collected', sakuraCollected + '/' + sakuraPetalPositions.length, 1800);
     }
   });
@@ -2143,6 +2155,7 @@ function checkCollectibles() {
     var dx = orb.position.x - px, dz = orb.position.z - pz;
     if (dx * dx + dz * dz < 2.5) {
       orb.visible = false;
+      sfxCoin();
       socket.emit('collect', { token: token, orbId: orb.userData.orbId });
     }
   });
@@ -2285,6 +2298,50 @@ function playEmote(rp, emote) {
     ud.baseY = -0.3;
     rp.mesh.position.y = -0.3;
     showNotif(rp.username + ' sat down', '', 2000);
+  } else if (emote === 'laugh') {
+    var startYl = ud.baseY || 0, t0l = t3;
+    (function laugh() {
+      var elapsed = t3 - t0l;
+      if (elapsed > 1.6) { rp.mesh.position.y = startYl; rp.mesh.rotation.x = 0; return; }
+      rp.mesh.position.y = startYl + Math.abs(Math.sin(elapsed * 14)) * 0.12;
+      rp.mesh.rotation.x = Math.sin(elapsed * 14) * 0.08;
+      requestAnimationFrame(laugh);
+    })();
+    showNotif(rp.username + ' is laughing 😂', '', 2000);
+  } else if (emote === 'cry') {
+    var head = rp.mesh.children[5]; // head box
+    var t0c = t3;
+    (function cry() {
+      var elapsed = t3 - t0c;
+      if (elapsed > 1.8) { if (head) head.rotation.x = 0; return; }
+      if (head) head.rotation.x = 0.3 + Math.sin(elapsed * 8) * 0.05;
+      requestAnimationFrame(cry);
+    })();
+    showNotif(rp.username + ' is crying 😢', '', 2000);
+  } else if (emote === 'point') {
+    var pointArm = rp.mesh.children[4]; // right arm
+    if (pointArm) {
+      var baseRotP = pointArm.rotation.x, t0p = t3;
+      (function point() {
+        var p = (t3 - t0p) / 1.0;
+        if (p >= 1) { pointArm.rotation.x = baseRotP; return; }
+        pointArm.rotation.x = baseRotP - 1.6;
+        requestAnimationFrame(point);
+      })();
+    }
+    showNotif(rp.username + ' points 👉', '', 2000);
+  } else if (emote === 'clap') {
+    var armL = rp.mesh.children[3], armR = rp.mesh.children[4]; // left arm, right arm
+    var t0cl = t3;
+    (function clap() {
+      var elapsed = t3 - t0cl;
+      if (elapsed > 1.4) { if (armL) armL.rotation.z = 0; if (armR) armR.rotation.z = 0; return; }
+      var s = Math.sin(elapsed * 16) * 0.5;
+      if (armL) armL.rotation.z = -0.9 + s * 0.15;
+      if (armR) armR.rotation.z = 0.9 - s * 0.15;
+      requestAnimationFrame(clap);
+    })();
+    showNotif(rp.username + ' claps 👏', '', 2000);
   }
 }
 
@@ -2539,9 +2596,59 @@ function addChatMsg(d) {
 }
 
 // ==================== EMOTES ====================
+// ==================== SOUND ====================
+function ensureSfxCtx() {
+  if (sfxCtx) return sfxCtx;
+  try { sfxCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { console.error('SFX: could not create AudioContext', e); }
+  return sfxCtx;
+}
+function playTone(freq, duration, type, startDelay, gainLevel) {
+  if (!sfxEnabled) return;
+  var ctx = ensureSfxCtx();
+  if (!ctx) return;
+  try {
+    var osc = ctx.createOscillator();
+    var gain = ctx.createGain();
+    osc.type = type || 'sine';
+    var t0 = ctx.currentTime + (startDelay || 0);
+    osc.frequency.setValueAtTime(freq, t0);
+    gain.gain.setValueAtTime(0, t0);
+    gain.gain.linearRampToValueAtTime(gainLevel || 0.12, t0 + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, t0 + duration);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(t0); osc.stop(t0 + duration + 0.05);
+  } catch (e) { console.error('SFX: playTone failed', e); }
+}
+function sfxCoin() { playTone(880, 0.12, 'triangle'); playTone(1318, 0.15, 'triangle', 0.06); }
+function sfxJump() {
+  if (!sfxEnabled) return;
+  var ctx = ensureSfxCtx(); if (!ctx) return;
+  try {
+    var osc = ctx.createOscillator(), gain = ctx.createGain();
+    osc.type = 'square';
+    var t0 = ctx.currentTime;
+    osc.frequency.setValueAtTime(300, t0);
+    osc.frequency.exponentialRampToValueAtTime(700, t0 + 0.15);
+    gain.gain.setValueAtTime(0.1, t0);
+    gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.18);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(t0); osc.stop(t0 + 0.2);
+  } catch (e) {}
+}
+function sfxEmote() { playTone(520, 0.1, 'sine', 0, 0.08); }
+function sfxNotif() { playTone(660, 0.08, 'sine', 0, 0.07); playTone(880, 0.1, 'sine', 0.05, 0.07); }
+function sfxQuest() { [523, 659, 784, 1046].forEach(function(f, i) { playTone(f, 0.2, 'triangle', i * 0.09, 0.1); }); }
+function sfxBell() { playTone(220, 1.2, 'sine', 0, 0.15); playTone(440, 1.0, 'sine', 0.02, 0.08); }
+function sfxClick() { playTone(440, 0.05, 'square', 0, 0.05); }
+function toggleSfx(v) {
+  sfxEnabled = v;
+  saveSettings();
+}
+
 function sendEmote(emote) {
   if (socket && token) socket.emit('emote', { token: token, emote: emote });
   if (localPlayerRig) playEmote({ mesh: localPlayerRig, username: 'You', baseY: 0 }, emote);
+  if (emote === 'jump') sfxJump(); else sfxEmote();
 }
 var emoteWheelOpen = false;
 function toggleEmoteWheel() { emoteWheelOpen ? closeEmoteWheel() : openEmoteWheel(); }

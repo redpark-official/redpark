@@ -67,6 +67,10 @@ const costumeCatalog = [
   { id: 'robot', name: 'Robot', price: 150 },
   { id: 'ninja', name: 'Ninja', price: 150 },
   { id: 'astronaut', name: 'Astronaut', price: 200 },
+  { id: 'samurai', name: 'Samurai', price: 250 },
+  { id: 'wizard', name: 'Wizard', price: 220 },
+  { id: 'firefighter', name: 'Firefighter', price: 180 },
+  { id: 'superhero', name: 'Superhero', price: 220 },
 ];
 const releasedCostumes = new Set();
 let maintenance = { active: false, endsAt: null };

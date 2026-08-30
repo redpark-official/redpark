@@ -510,6 +510,29 @@ io.on('connection', (socket) => {
       await supabase.from('players').delete().eq('username', targetUsername);
       delete userCache[targetUsername];
       return socket.emit('admin_success', targetUsername + ' was IP-banned and deleted. IP ' + ip + ' can no longer connect.');
+    } else if (action === 'unban_ip') {
+      if (!user.admin) return socket.emit('admin_error', 'Only admins can unban IPs');
+      const ip = reason; // ip passed via reason field
+      if (!ip) return socket.emit('admin_error', 'No IP specified');
+      bannedIps.delete(ip);
+      await supabase.from('banned_ips').delete().eq('ip', ip);
+      return socket.emit('admin_success', 'Unbanned IP ' + ip);
+    } else if (action === 'coin_rain') {
+      if (!user.admin) return socket.emit('admin_error', 'Admin only');
+      const amount = parseInt(reason, 10);
+      if (!Number.isFinite(amount) || amount <= 0) return socket.emit('admin_error', 'Enter a valid coin amount');
+      const onlineUsernames = [...new Set(Object.values(players).map(p => p.username))];
+      let count = 0;
+      for (const uname of onlineUsernames) {
+        const u = await loadUser(uname);
+        if (!u) continue;
+        const coins = (u.coins || 0) + amount;
+        await saveUser(uname, { coins });
+        const sid = getSocketIdByUsername(uname);
+        if (sid) { io.to(sid).emit('coins', { coins }); io.to(sid).emit('coin_rain_notify', { amount }); }
+        count++;
+      }
+      return socket.emit('admin_success', 'Coin rain: gave ' + amount + ' coins to ' + count + ' online player(s)');
     } else if (action === 'set_display_name') {
       if (!user.admin) return socket.emit('admin_error', 'Only admins can rename players');
       const newName = (reason || '').trim().replace(/\s+/g, ' ');
@@ -560,6 +583,42 @@ io.on('connection', (socket) => {
       return socket.emit('admin_error', 'Unknown action');
     }
     socket.emit('admin_success', action + ' applied to ' + targetUsername)
+  });
+
+  socket.on('list_banned_ips', async ({ token }) => {
+    const username = getUsername(token);
+    const user = await loadUser(username);
+    if (!user || !user.admin) return;
+    const { data, error } = await supabase.from('banned_ips').select('*').order('banned_at', { ascending: false });
+    if (error) return socket.emit('admin_error', 'Could not load banned IPs: ' + error.message);
+    socket.emit('banned_ips_list', data || []);
+  });
+
+  socket.on('get_server_stats', async ({ token }) => {
+    const username = getUsername(token);
+    const user = await loadUser(username);
+    if (!user || (!user.admin && !user.mod)) return;
+    const { count: totalPlayers } = await supabase.from('players').select('*', { count: 'exact', head: true });
+    const { data: coinData } = await supabase.from('players').select('coins');
+    const totalCoins = (coinData || []).reduce((sum, r) => sum + (r.coins || 0), 0);
+    const onlineCount = new Set(Object.values(players).map(p => p.username)).size;
+    socket.emit('server_stats', {
+      totalPlayers: totalPlayers || 0,
+      totalCoins,
+      onlineCount,
+      jumbotronSpawned, djBoothSpawned, weatherState, chatLocked,
+      maintenanceActive: isMaintenanceActive(),
+    });
+  });
+
+  socket.on('admin_whisper', async ({ token, targetUsername, message }) => {
+    const username = getUsername(token);
+    const user = await loadUser(username);
+    if (!user || (!user.admin && !user.mod)) return;
+    const sid = getSocketIdByUsername(targetUsername);
+    if (!sid) return socket.emit('admin_error', targetUsername + ' is not online');
+    io.to(sid).emit('admin_whisper', { from: username, message });
+    socket.emit('admin_success', 'Sent to ' + targetUsername);
   });
 
   socket.on('admin_list', async ({ token, showHidden }) => {

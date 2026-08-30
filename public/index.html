@@ -505,7 +505,7 @@ function clearSession() {
   try { ['rp_token', 'rp_username', 'rp_color', 'rp_admin'].forEach(function(k) { localStorage.removeItem(k); }); } catch (e) {}
 }
 function saveSettings() {
-  try { localStorage.setItem('rp_settings', JSON.stringify({ sensitivity: sensitivity, moveSpeed: moveSpeed, color: myColor, allowBackward: allowBackward, compactUI: compactUI })); } catch (e) {}
+  try { localStorage.setItem('rp_settings', JSON.stringify({ sensitivity: sensitivity, moveSpeed: moveSpeed, color: myColor, allowBackward: allowBackward, compactUI: compactUI, sfxEnabled: sfxEnabled })); } catch (e) {}
 }
 function loadSettings() {
   try {
@@ -514,11 +514,13 @@ function loadSettings() {
     if (s.moveSpeed) moveSpeed = s.moveSpeed;
     if (s.color) myColor = s.color;
     allowBackward = !!s.allowBackward;
+    sfxEnabled = (typeof s.sfxEnabled === 'boolean') ? s.sfxEnabled : true;
     // Auto-enable small-display mode on any touch/mobile device — always wins over a stale saved value
     var isMobileDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth <= 480;
     compactUI = isMobileDevice ? true : ((typeof s.compactUI === 'boolean') ? s.compactUI : false);
     var abt = document.getElementById('allow-backward-toggle'); if (abt) abt.checked = allowBackward;
     var cut = document.getElementById('compact-ui-toggle'); if (cut) cut.checked = compactUI;
+    var sfxT = document.getElementById('sfx-toggle'); if (sfxT) sfxT.checked = sfxEnabled;
     applyCompactUI();
   } catch (e) {}
 }
@@ -827,7 +829,7 @@ function initSocket() {
   socket.on('friend_sent', function(u) { showNotif('Request sent to ' + u, '', 2000); });
   socket.on('friend_error', function(m) { showNotif(m, '', 2000); });
   socket.on('admin_success', function(m) { var e = document.getElementById('admin-msg'); e.style.color = '#4ade80'; e.textContent = m; refreshAdminList(); });
-  socket.on('broadcast', function(d) { showNotif('📢 ' + (d.by||'System'), d.message, 6000); addChatMsg({ username: '[SYSTEM]', color: '#f87171', admin: false, mod: false, message: d.message }); });
+  socket.on('broadcast', function(d) { sfxNotif(); showNotif('📢 ' + (d.by||'System'), d.message, 6000); addChatMsg({ username: '[SYSTEM]', color: '#f87171', admin: false, mod: false, message: d.message }); });
   socket.on('admin_freeze', function(d) { if(d.target===myUsername){ moveSpeed=0; showNotif('Frozen by admin','',4000); } });
   socket.on('admin_unfreeze', function(d) { if(d.target===myUsername){ moveSpeed=5; showNotif('Unfrozen','',2000); } });
   socket.on('admin_error', function(m) { var e = document.getElementById('admin-msg'); e.style.color = '#f87171'; e.textContent = m; });
@@ -2598,8 +2600,14 @@ function addChatMsg(d) {
 // ==================== EMOTES ====================
 // ==================== SOUND ====================
 function ensureSfxCtx() {
-  if (sfxCtx) return sfxCtx;
-  try { sfxCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { console.error('SFX: could not create AudioContext', e); }
+  if (sfxCtx) {
+    if (sfxCtx.state === 'suspended') sfxCtx.resume().catch(function() {});
+    return sfxCtx;
+  }
+  try {
+    sfxCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (sfxCtx.state === 'suspended') sfxCtx.resume().catch(function() {});
+  } catch (e) { console.error('SFX: could not create AudioContext', e); }
   return sfxCtx;
 }
 function playTone(freq, duration, type, startDelay, gainLevel) {
@@ -2672,12 +2680,14 @@ function updateCoinUI() {
   document.getElementById('stat-coins').textContent = myCoins;
 }
 function toggleWrist() {
+  sfxClick();
   document.getElementById('wrist-panel').classList.toggle('open');
 }
 function closeWrist() {
   document.getElementById('wrist-panel').classList.remove('open');
 }
 function openPanel(id) {
+  sfxClick();
   document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('open'); });
   document.getElementById(id).classList.add('open');
   if (id === 'friends-panel') renderFriends();

@@ -15,46 +15,33 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
-      - name: Install Capacitor
-        run: |
-          npm install @capacitor/core @capacitor/cli @capacitor/ios
+      - name: Check Capacitor
+        run: npx cap --version
 
-      - name: Create Capacitor config
-        run: |
-          cat > capacitor.config.ts <<'EOF'
-          import type { CapacitorConfig } from '@capacitor/cli';
-
-          const config: CapacitorConfig = {
-            appId: 'com.redpark.game',
-            appName: 'Red Park',
-            webDir: 'public'
-          };
-
-          export default config;
-          EOF
-
-      - name: Create iOS project
+      - name: Add iOS project
         run: npx cap add ios
 
-      - name: Copy web files
+      - name: Copy web application
         run: npx cap copy ios
 
-      - name: Build iOS app
+      - name: Build unsigned iOS app
         run: |
           xcodebuild \
-            -workspace ios/App/App.xcworkspace \
+            -project ios/App/App.xcodeproj \
             -scheme App \
             -sdk iphoneos \
             -configuration Release \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
 
-      - name: Create IPA
+      - name: Package IPA
         run: |
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/App.app Payload/App.app
